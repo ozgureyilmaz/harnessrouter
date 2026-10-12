@@ -12,7 +12,7 @@ const snapshot = await readJson('data/metrics.json');
 assert.equal(snapshot.mode, 'RECORDED_PUBLIC_SNAPSHOT');
 const allowed = new Set(['index.html', 'evidence.html', 'README.md', '.nojekyll',
   'data/metrics.json', 'data/codex-only-run.json', 'data/browser-comparison.json',
-  'browser-comparison.js', 'browser-comparison.css']);
+  'browser-comparison.js', 'browser-comparison.css', 'decision-explorer.js', 'decision-explorer.css']);
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const secretPattern = /sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:OPENAI_API_KEY|FAL_KEY)\s*[:=]\s*["']?[A-Za-z0-9_-]{10,}|(?:Bearer\s+)[A-Za-z0-9_-]{20,}/;
 const privatePath = /(?:\/Users\/|\/home\/|[A-Z]:\\Users\\|file:\/\/|\.\.\/artifacts\/)/;
@@ -110,4 +110,5 @@ for (const page of ['index.html', 'evidence.html']) {
 const index = await readFile(resolve(directory, 'index.html'), 'utf8');
 for (const run of [browser, creative]) assert(index.includes(`${(run.timing.totalMs / 1000).toFixed(2)} s`), 'Featured timing drift');
 new Script(await readFile(resolve(directory, 'browser-comparison.js'), 'utf8'));
+new Script(await readFile(resolve(directory, 'decision-explorer.js'), 'utf8'));
 console.log(`PASS: ${snapshot.runs.length} public records, ${4 + codex.artifacts.length} original image hashes, featured PNG dimensions, portable links, JavaScript syntax, and public file boundary.`);
