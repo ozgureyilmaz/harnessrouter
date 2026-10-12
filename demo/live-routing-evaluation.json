@@ -1,0 +1,366 @@
+{
+  "mode": "LIVE_ROUTING_LABEL_EVALUATION_NO_HARNESS_EXECUTION",
+  "cases": 12,
+  "correct": 12,
+  "liveDecisionCases": 8,
+  "liveDecisionCorrect": 8,
+  "liveDecisionLabelAccuracy": 1,
+  "confusionMatrix": {
+    "pi-browser": {
+      "pi-browser": 4
+    },
+    "fal-creative": {
+      "fal-creative": 4
+    },
+    "native": {
+      "native": 2
+    },
+    "none": {
+      "none": 2
+    }
+  },
+  "results": [
+    {
+      "fixtureId": "B-01",
+      "runId": "76e5356f-d5e5-4445-b5e9-a983936f314b",
+      "expectedFamily": "pi-browser",
+      "actualFamily": "pi-browser",
+      "method": "LIVE_DECISIONS_CLASSIFICATION",
+      "passed": true,
+      "decision": {
+        "routeId": "pi-browser:configured",
+        "model": "gpt-6-luna",
+        "confidence": 0.98,
+        "probabilities": [
+          {
+            "value": "pi-browser:configured",
+            "probability": 0.99
+          },
+          {
+            "value": "native:defer",
+            "probability": 0.01
+          }
+        ],
+        "usage": {
+          "input_tokens": 221,
+          "output_tokens": 0,
+          "total_tokens": 221
+        },
+        "latencyMs": 1033.483875,
+        "providerDecisionId": "req_79d210580a004c2cb1ae2c9ae109f232",
+        "cost": {
+          "status": "estimated",
+          "usd": 0.000022100000000000002,
+          "details": "Estimated from Decisions input tokens at USD 0.10 per 1M; verify current provider pricing"
+        }
+      },
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "B-02",
+      "runId": "650f861e-21a0-4ea3-b899-7ce3c3fb7c60",
+      "expectedFamily": "pi-browser",
+      "actualFamily": "pi-browser",
+      "method": "LIVE_DECISIONS_CLASSIFICATION",
+      "passed": true,
+      "decision": {
+        "routeId": "pi-browser:configured",
+        "model": "gpt-6-luna",
+        "confidence": 0.98,
+        "probabilities": [
+          {
+            "value": "pi-browser:configured",
+            "probability": 0.99
+          },
+          {
+            "value": "native:defer",
+            "probability": 0.01
+          }
+        ],
+        "usage": {
+          "input_tokens": 225,
+          "output_tokens": 0,
+          "total_tokens": 225
+        },
+        "latencyMs": 292.54933299999993,
+        "providerDecisionId": "req_6c5bbc661f0e4246bd374916e98dae84",
+        "cost": {
+          "status": "estimated",
+          "usd": 0.0000225,
+          "details": "Estimated from Decisions input tokens at USD 0.10 per 1M; verify current provider pricing"
+        }
+      },
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "B-03",
+      "runId": "dc537e4a-8f64-4c51-9ae8-75970e23d6e8",
+      "expectedFamily": "pi-browser",
+      "actualFamily": "pi-browser",
+      "method": "LIVE_DECISIONS_CLASSIFICATION",
+      "passed": true,
+      "decision": {
+        "routeId": "pi-browser:configured",
+        "model": "gpt-6-luna",
+        "confidence": 0.94,
+        "probabilities": [
+          {
+            "value": "pi-browser:configured",
+            "probability": 0.97
+          },
+          {
+            "value": "native:defer",
+            "probability": 0.03
+          }
+        ],
+        "usage": {
+          "input_tokens": 223,
+          "output_tokens": 0,
+          "total_tokens": 223
+        },
+        "latencyMs": 602.9023750000001,
+        "providerDecisionId": "req_1c594bcb13134f9fbd5fc98e451127ac",
+        "cost": {
+          "status": "estimated",
+          "usd": 0.0000223,
+          "details": "Estimated from Decisions input tokens at USD 0.10 per 1M; verify current provider pricing"
+        }
+      },
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "B-04",
+      "runId": "62e3804c-0b74-40c9-80ca-a7122a75c97d",
+      "expectedFamily": "pi-browser",
+      "actualFamily": "pi-browser",
+      "method": "LIVE_DECISIONS_CLASSIFICATION",
+      "passed": true,
+      "decision": {
+        "routeId": "pi-browser:configured",
+        "model": "gpt-6-luna",
+        "confidence": 0.92,
+        "probabilities": [
+          {
+            "value": "pi-browser:configured",
+            "probability": 0.96
+          },
+          {
+            "value": "native:defer",
+            "probability": 0.04
+          }
+        ],
+        "usage": {
+          "input_tokens": 226,
+          "output_tokens": 0,
+          "total_tokens": 226
+        },
+        "latencyMs": 367.9290000000001,
+        "providerDecisionId": "req_2ac106692c8a4179aaa7243025d4e313",
+        "cost": {
+          "status": "estimated",
+          "usd": 0.0000226,
+          "details": "Estimated from Decisions input tokens at USD 0.10 per 1M; verify current provider pricing"
+        }
+      },
+      "executionPerformed": false,
+      "limit": "Read-only Pi tools cannot trigger form feedback; this label experiment does not prove form-task completion."
+    },
+    {
+      "fixtureId": "C-01",
+      "runId": "1066e1bb-d891-4b7a-a712-0d7fb0b3a834",
+      "expectedFamily": "fal-creative",
+      "actualFamily": "fal-creative",
+      "method": "LIVE_DECISIONS_CLASSIFICATION",
+      "passed": true,
+      "decision": {
+        "routeId": "fal-creative:image-fast",
+        "model": "gpt-6-luna",
+        "confidence": 0.97,
+        "probabilities": [
+          {
+            "value": "fal-creative:image-fast",
+            "probability": 0.98
+          },
+          {
+            "value": "fal-creative:image-quality",
+            "probability": 0.01
+          },
+          {
+            "value": "native:defer",
+            "probability": 0.01
+          }
+        ],
+        "usage": {
+          "input_tokens": 254,
+          "output_tokens": 0,
+          "total_tokens": 254
+        },
+        "latencyMs": 348.43274999999994,
+        "providerDecisionId": "req_08ebfee8d3e940a39c76918c96798489",
+        "cost": {
+          "status": "estimated",
+          "usd": 0.0000254,
+          "details": "Estimated from Decisions input tokens at USD 0.10 per 1M; verify current provider pricing"
+        }
+      },
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "C-02",
+      "runId": "8f845f0b-b38a-43f5-84e2-9a980645a3e3",
+      "expectedFamily": "fal-creative",
+      "actualFamily": "fal-creative",
+      "method": "LIVE_DECISIONS_CLASSIFICATION",
+      "passed": true,
+      "decision": {
+        "routeId": "fal-creative:image-quality",
+        "model": "gpt-6-luna",
+        "confidence": 0.66,
+        "probabilities": [
+          {
+            "value": "fal-creative:image-fast",
+            "probability": 0.21
+          },
+          {
+            "value": "fal-creative:image-quality",
+            "probability": 0.77
+          },
+          {
+            "value": "native:defer",
+            "probability": 0.02
+          }
+        ],
+        "usage": {
+          "input_tokens": 258,
+          "output_tokens": 0,
+          "total_tokens": 258
+        },
+        "latencyMs": 301.33604099999957,
+        "providerDecisionId": "req_db3eb894f9af473a812c2a5f0b607bce",
+        "cost": {
+          "status": "estimated",
+          "usd": 0.0000258,
+          "details": "Estimated from Decisions input tokens at USD 0.10 per 1M; verify current provider pricing"
+        }
+      },
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "C-03",
+      "runId": "ce243152-7425-4e5f-8c02-60ed67efe610",
+      "expectedFamily": "fal-creative",
+      "actualFamily": "fal-creative",
+      "method": "LIVE_DECISIONS_CLASSIFICATION",
+      "passed": true,
+      "decision": {
+        "routeId": "fal-creative:image-quality",
+        "model": "gpt-6-luna",
+        "confidence": 0.33,
+        "probabilities": [
+          {
+            "value": "fal-creative:image-fast",
+            "probability": 0.44
+          },
+          {
+            "value": "fal-creative:image-quality",
+            "probability": 0.55
+          },
+          {
+            "value": "native:defer",
+            "probability": 0.01
+          }
+        ],
+        "usage": {
+          "input_tokens": 255,
+          "output_tokens": 0,
+          "total_tokens": 255
+        },
+        "latencyMs": 894.9373340000002,
+        "providerDecisionId": "req_ad489a2482204e2784d30644788b66d4",
+        "cost": {
+          "status": "estimated",
+          "usd": 0.0000255,
+          "details": "Estimated from Decisions input tokens at USD 0.10 per 1M; verify current provider pricing"
+        }
+      },
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "C-04",
+      "runId": "20127334-321c-42d5-ae5a-6869b179b4d2",
+      "expectedFamily": "fal-creative",
+      "actualFamily": "fal-creative",
+      "method": "LIVE_DECISIONS_CLASSIFICATION",
+      "passed": true,
+      "decision": {
+        "routeId": "fal-creative:image-fast",
+        "model": "gpt-6-luna",
+        "confidence": 0.97,
+        "probabilities": [
+          {
+            "value": "fal-creative:image-fast",
+            "probability": 0.98
+          },
+          {
+            "value": "fal-creative:image-quality",
+            "probability": 0.01
+          },
+          {
+            "value": "native:defer",
+            "probability": 0.01
+          }
+        ],
+        "usage": {
+          "input_tokens": 257,
+          "output_tokens": 0,
+          "total_tokens": 257
+        },
+        "latencyMs": 377.96950000000015,
+        "providerDecisionId": "req_6794c11cb4d24d5683178f416a491b55",
+        "cost": {
+          "status": "estimated",
+          "usd": 0.0000257,
+          "details": "Estimated from Decisions input tokens at USD 0.10 per 1M; verify current provider pricing"
+        }
+      },
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "N-01",
+      "runId": "70c3394a-f58a-4890-9321-8dc750f5ccc5",
+      "expectedFamily": "native",
+      "actualFamily": "native",
+      "method": "deterministic_policy",
+      "passed": true,
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "N-02",
+      "runId": "bfa04383-c46b-4e98-bc58-cb23dfa9e504",
+      "expectedFamily": "native",
+      "actualFamily": "native",
+      "method": "deterministic_policy",
+      "passed": true,
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "X-01",
+      "runId": "01e8a333-4330-47d4-859a-63c6b7d72323",
+      "expectedFamily": "none",
+      "actualFamily": "none",
+      "method": "deterministic_policy",
+      "passed": true,
+      "executionPerformed": false
+    },
+    {
+      "fixtureId": "X-02",
+      "runId": "171336f7-5eba-4079-8e44-f98cb35d1830",
+      "expectedFamily": "none",
+      "actualFamily": "none",
+      "method": "deterministic_policy",
+      "passed": true,
+      "executionPerformed": false
+    }
+  ],
+  "limits": "Historical evaluation under the earlier fixture definition. One phrasing per fixture; public example URL supplied only for policy admission. Native/unsupported cases are deterministic. Classification is not task completion, model quality or efficiency. B-04 was classified as Pi without executing a form interaction; the current fixture now requires unsupported browser.form_interaction and expects no eligible route. This historical B-04 result is superseded and is not current policy evidence."
+}

@@ -1,0 +1,54 @@
+version: 1
+harnesses:
+  - id: pi-browser
+    kind: external_agent_runtime
+    transport: pi_rpc
+    enabled: true
+    permissions: [public_web_read, screenshot]
+    capabilities: [browser.navigate, browser.extract, browser.screenshot]
+    default_timeout_ms: 120000
+    routes:
+      - id: pi-browser:configured
+        description: Actual isolated Pi RPC agent with configured OAuth model and restricted Chrome tools.
+        agent_model_profile: configured
+        modalities: [text, screenshot]
+        eligible_requirements: [browser, screenshot, public_site_research]
+        price_usd: null
+        price_status: not_applicable
+  - id: fal-creative
+    kind: custom_agent_harness
+    transport: in_process
+    enabled: true
+    permissions: [paid_media_generation]
+    capabilities: [media.text_to_image]
+    default_timeout_ms: 180000
+    routes:
+      - id: fal-creative:image-fast
+        description: FLUX Schnell specialist; four steps, budget-first draft image planning and validated artifact.
+        generation_model_id: fal-ai/flux/schnell
+        modalities: [image]
+        eligible_requirements: [text_to_image, image]
+        price_usd: 0.003
+        price_status: estimated
+      - id: fal-creative:image-quality
+        description: FLUX.2 dev specialist; detailed image planning with guidance and controlled step count.
+        generation_model_id: fal-ai/flux-2
+        modalities: [image]
+        eligible_requirements: [text_to_image, image]
+        price_usd: 0.012
+        price_status: estimated
+  - id: native
+    kind: host_defer
+    transport: none
+    enabled: true
+    permissions: []
+    capabilities: [coding, host_owned_tasks]
+    default_timeout_ms: 0
+    routes:
+      - id: native:defer
+        description: Return control to the current Codex host without executing the task. Prefer the specialist for supported browser or image work; defer only if delegation is unsuitable.
+        modalities: [text]
+        eligible_requirements: [coding, host_owned_tasks]
+        fallback_requirements: [browser, screenshot, public_site_research, image, text_to_image]
+        price_usd: null
+        price_status: not_applicable

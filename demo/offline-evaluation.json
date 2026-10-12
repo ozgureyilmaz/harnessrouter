@@ -1,0 +1,245 @@
+{
+  "mode": "OFFLINE_ELIGIBILITY_ONLY",
+  "providerCalls": 0,
+  "decisionsRouteAccuracy": "not measured",
+  "cases": 12,
+  "passed": 12,
+  "results": [
+    {
+      "id": "B-01",
+      "expectedFamily": "pi-browser",
+      "eligibleFamilies": [
+        "pi-browser",
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "fal-creative:image-fast",
+          "reason": "requirement_not_supported:browser"
+        },
+        {
+          "id": "fal-creative:image-quality",
+          "reason": "requirement_not_supported:browser"
+        }
+      ]
+    },
+    {
+      "id": "B-02",
+      "expectedFamily": "pi-browser",
+      "eligibleFamilies": [
+        "pi-browser",
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "fal-creative:image-fast",
+          "reason": "requirement_not_supported:browser"
+        },
+        {
+          "id": "fal-creative:image-quality",
+          "reason": "requirement_not_supported:browser"
+        }
+      ]
+    },
+    {
+      "id": "B-03",
+      "expectedFamily": "pi-browser",
+      "eligibleFamilies": [
+        "pi-browser",
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "fal-creative:image-fast",
+          "reason": "requirement_not_supported:browser"
+        },
+        {
+          "id": "fal-creative:image-quality",
+          "reason": "requirement_not_supported:browser"
+        }
+      ]
+    },
+    {
+      "id": "B-04",
+      "expectedFamily": "none",
+      "eligibleFamilies": [],
+      "passed": true,
+      "requiredCapabilities": [
+        "browser.form_interaction"
+      ],
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "capability_not_supported:browser.form_interaction"
+        },
+        {
+          "id": "fal-creative:image-fast",
+          "reason": "requirement_not_supported:browser"
+        },
+        {
+          "id": "fal-creative:image-quality",
+          "reason": "requirement_not_supported:browser"
+        },
+        {
+          "id": "native:defer",
+          "reason": "requirement_not_supported:browser"
+        }
+      ]
+    },
+    {
+      "id": "C-01",
+      "expectedFamily": "fal-creative",
+      "eligibleFamilies": [
+        "fal-creative",
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "requirement_not_supported:text_to_image"
+        }
+      ]
+    },
+    {
+      "id": "C-02",
+      "expectedFamily": "fal-creative",
+      "eligibleFamilies": [
+        "fal-creative",
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "requirement_not_supported:text_to_image"
+        }
+      ]
+    },
+    {
+      "id": "C-03",
+      "expectedFamily": "fal-creative",
+      "eligibleFamilies": [
+        "fal-creative",
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "requirement_not_supported:text_to_image"
+        }
+      ]
+    },
+    {
+      "id": "C-04",
+      "expectedFamily": "fal-creative",
+      "eligibleFamilies": [
+        "fal-creative",
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "requirement_not_supported:text_to_image"
+        }
+      ]
+    },
+    {
+      "id": "N-01",
+      "expectedFamily": "native",
+      "eligibleFamilies": [
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "requirement_not_supported:coding"
+        },
+        {
+          "id": "fal-creative:image-fast",
+          "reason": "requirement_not_supported:coding"
+        },
+        {
+          "id": "fal-creative:image-quality",
+          "reason": "requirement_not_supported:coding"
+        }
+      ]
+    },
+    {
+      "id": "N-02",
+      "expectedFamily": "native",
+      "eligibleFamilies": [
+        "native"
+      ],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "requirement_not_supported:coding"
+        },
+        {
+          "id": "fal-creative:image-fast",
+          "reason": "requirement_not_supported:coding"
+        },
+        {
+          "id": "fal-creative:image-quality",
+          "reason": "requirement_not_supported:coding"
+        }
+      ]
+    },
+    {
+      "id": "X-01",
+      "expectedFamily": "none",
+      "eligibleFamilies": [],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "private_account_action_denied"
+        },
+        {
+          "id": "fal-creative:image-fast",
+          "reason": "private_account_action_denied"
+        },
+        {
+          "id": "fal-creative:image-quality",
+          "reason": "private_account_action_denied"
+        },
+        {
+          "id": "native:defer",
+          "reason": "private_account_action_denied"
+        }
+      ]
+    },
+    {
+      "id": "X-02",
+      "expectedFamily": "none",
+      "eligibleFamilies": [],
+      "passed": true,
+      "excluded": [
+        {
+          "id": "pi-browser:configured",
+          "reason": "video_disabled"
+        },
+        {
+          "id": "fal-creative:image-fast",
+          "reason": "video_disabled"
+        },
+        {
+          "id": "fal-creative:image-quality",
+          "reason": "video_disabled"
+        },
+        {
+          "id": "native:defer",
+          "reason": "video_disabled"
+        }
+      ]
+    }
+  ]
+}

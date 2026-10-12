@@ -1,0 +1,18 @@
+{
+  "runId": "242cd6de-76da-4519-bbbb-37610a136585",
+  "kind": "result.json",
+  "status": "completed",
+  "selectedRouteId": "fal-creative:image-quality",
+  "schemaVersion": "1.2",
+  "timing": {
+    "totalMs": 20077.321958000073,
+    "decisionMs": 900.0190419999999,
+    "executionMs": 18331.824167000013,
+    "handoffMs": 1741.876500000013,
+    "verificationMs": 16.26366599998437
+  },
+  "cost": {
+    "status": "estimated",
+    "usd": 0.0120348
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "schemaVersion": "1.0",
+  "status": "partial",
+  "runId": "9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a",
+  "mode": "native_codex_only",
+  "taskId": "example-site-to-hero",
+  "taskPrompt": "Inspect https://example.com in a fresh browser session, measure its visual style, then create a matching 16:9 hero illustration from those observations.",
+  "execution": {
+    "codexModel": null,
+    "nativeToolsAvailable": [
+      "functions.exec",
+      "functions.wait",
+      "apply_patch",
+      "clock__curr_time",
+      "create_goal",
+      "exec_command",
+      "get_goal",
+      "image_gen__imagegen",
+      "list_mcp_resource_templates",
+      "list_mcp_resources",
+      "read_mcp_resource",
+      "update_goal",
+      "view_image",
+      "web__run",
+      "write_stdin"
+    ],
+    "toolsUsed": [
+      "functions.exec",
+      "exec_command",
+      "apply_patch",
+      "web__run",
+      "image_gen__imagegen",
+      "view_image"
+    ],
+    "startedAt": "2026-10-12T11:43:39.788595+00:00",
+    "completedAt": "2026-10-12T11:50:45.973513+00:00",
+    "durationMs": 426116.506917
+  },
+  "steps": [
+    {
+      "id": "inspect-site",
+      "label": "Inspect the public site",
+      "status": "unsupported",
+      "summary": "Live native web retrieval succeeded, but no fresh isolated browser session or rendered screenshot was obtained.",
+      "durationMs": 38015.233
+    },
+    {
+      "id": "measure-style",
+      "label": "Measure its visual style",
+      "status": "unsupported",
+      "summary": "Visual measurement values are null. Retrieved content observations are recorded separately from provisional illustration design choices.",
+      "durationMs": 165.014125
+    },
+    {
+      "id": "create-image",
+      "label": "Create the matching hero image",
+      "status": "completed",
+      "summary": "Native image generation returned a real PNG, copied locally. Creation succeeded as a provisional content-informed draft; matching measured site style remains unsupported.",
+      "durationMs": 58367.367583
+    },
+    {
+      "id": "verify-output",
+      "label": "Verify the output",
+      "status": "failed",
+      "summary": "Real PNG integrity and native visual inspection passed. Exact 16:9 check failed (1672x940); source-site style matching is unsupported. demo/metrics.json hash unchanged; 297/299 protected hashes match, with two differences not written by this session and actor unverified.",
+      "durationMs": 49819.727583
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/hero.png",
+      "label": "Generated hero draft — 1672×940, approximate 16:9, site style unverified"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/events.jsonl",
+      "label": "Timestamped execution events and verification correction"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/capabilities.json",
+      "label": "Native tool inventory, limitations and unknown model identity"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/site-tool-response.json",
+      "label": "Real native web retrieval evidence"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/site-observations.json",
+      "label": "Retrieved content observations"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/style-measurements.json",
+      "label": "Unsupported visual measurements and provisional design choices"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/image-prompt.txt",
+      "label": "Exact prompt sent to the native image generation tool"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/image-output.json",
+      "label": "Native image output metadata and SHA-256"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/verification.json",
+      "label": "Actual image checks and unmet task requirements"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/protected-files-before.json",
+      "label": "Initial hashes of existing router artifacts and demo JSON"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/protected-files-verification.json",
+      "label": "Protected-file comparison and observed differences"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/template.json",
+      "label": "Original demo record template"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/timing-state.json",
+      "label": "Monotonic event timing evidence"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/record-event.py",
+      "label": "Local evidence recorder"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/run.json",
+      "label": "Full archived Codex-only run"
+    },
+    {
+      "path": "artifacts/codex-only/9df28c6c-f5cb-4c9e-91f2-0ae30bf0c98a/record-validation.json",
+      "label": "Local record/schema and archive-preview consistency checks"
+    }
+  ],
+  "cost": {
+    "status": "unknown",
+    "amountUsd": null,
+    "source": null
+  },
+  "outcomeNote": "Partial native-only run: public-page text retrieved and a real content-informed hero draft generated. Fresh browser inspection and rendered visual-style measurements were unsupported under the no-MCP constraint. The 1672x940 image is only approximately 16:9; exact ratio verification failed and visual match to the site is unverified. Exact host model identity and actual cost are unavailable. Durations include orchestration and user interruption. This session did not invoke harnessrouter, MCP, Pi, fal-creative or direct provider/API calls, install packages, or write router records/metrics. The metrics hash is unchanged; two other protected hashes changed during the run, with actor unverified. See verification.json and the explicit event correction."
+}

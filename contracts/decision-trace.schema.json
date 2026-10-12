@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harnessrouter.local/contracts/decision-trace.schema.json",
+  "title": "RouteDecisionTrace v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "eligibleRouteIds",
+    "decisionStatus"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "eligibleRouteIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "excludedRoutes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "decisionStatus": {
+      "enum": [
+        "selected",
+        "not_required",
+        "refused",
+        "timeout",
+        "unavailable",
+        "no_candidates",
+        "invalid_response"
+      ]
+    },
+    "selectedRouteId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "probabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "value",
+          "probability"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "latencyMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "decisionModel": {
+      "type": "string"
+    },
+    "providerDecisionId": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    }
+  }
+}

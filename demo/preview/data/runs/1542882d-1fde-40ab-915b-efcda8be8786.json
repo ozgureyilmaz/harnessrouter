@@ -1,0 +1,14 @@
+{
+  "runId": "1542882d-1fde-40ab-915b-efcda8be8786",
+  "kind": "baseline.json",
+  "status": "completed",
+  "selectedRouteId": "direct-fal",
+  "timing": {
+    "totalMs": 8549.282833,
+    "verificationMs": 3125.2277080000003
+  },
+  "cost": {
+    "status": "estimated",
+    "usd": 0.012
+  }
+}

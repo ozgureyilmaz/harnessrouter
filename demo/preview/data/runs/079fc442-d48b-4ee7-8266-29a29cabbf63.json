@@ -1,0 +1,20 @@
+{
+  "runId": "079fc442-d48b-4ee7-8266-29a29cabbf63",
+  "kind": "result.json",
+  "status": "cancelled",
+  "selectedRouteId": "pi-browser:configured",
+  "schemaVersion": "1.0",
+  "timing": {
+    "totalMs": 5856.699208000035,
+    "decisionMs": 3041.8393749999814,
+    "executionMs": 1203.104250000033,
+    "handoffMs": 0,
+    "verificationMs": 0.0005840000230818987
+  },
+  "cost": {
+    "status": "unknown"
+  },
+  "error": {
+    "code": "pi_rpc_cancelled"
+  }
+}

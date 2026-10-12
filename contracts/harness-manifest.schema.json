@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harnessrouter.local/contracts/harness-manifest.schema.json",
+  "title": "Harness registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "harnesses"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "harnesses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "transport",
+          "enabled",
+          "permissions",
+          "capabilities",
+          "default_timeout_ms",
+          "routes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "external_agent_runtime",
+              "custom_agent_harness",
+              "host_defer"
+            ]
+          },
+          "transport": {
+            "enum": [
+              "pi_rpc",
+              "in_process",
+              "none"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "default_timeout_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "description",
+                "modalities",
+                "eligible_requirements",
+                "price_status"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "agent_model_profile": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "generation_model_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "modalities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "eligible_requirements": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "fallback_requirements": {
+                  "description": "Only host_defer routes: safe requirements accepted as a control fallback alongside an eligible specialist. This does not declare executable host capabilities.",
+                  "type": "array",
+                  "items": {"type": "string"},
+                  "uniqueItems": true
+                },
+                "price_usd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "price_status": {
+                  "enum": [
+                    "known",
+                    "estimated",
+                    "unknown",
+                    "unverified",
+                    "not_applicable"
+                  ]
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

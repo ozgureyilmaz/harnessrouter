@@ -1,0 +1,17 @@
+{
+  "runId": "a86efc0f-e53e-4e83-9259-7d0af74e8906",
+  "kind": "result.json",
+  "status": "completed",
+  "selectedRouteId": "pi-browser:configured",
+  "schemaVersion": "1.2",
+  "timing": {
+    "totalMs": 16921.848250000003,
+    "decisionMs": 3153.829208,
+    "executionMs": 12196.674583,
+    "handoffMs": 326.1584160000002,
+    "verificationMs": 13.62449999999808
+  },
+  "cost": {
+    "status": "unknown"
+  }
+}

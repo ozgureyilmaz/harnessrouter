@@ -1,0 +1,475 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-10-12T11:40:45.559Z",
+  "exportedAt": "2026-10-12T11:58:14.826Z",
+  "mode": "RECORDED_PUBLIC_SNAPSHOT",
+  "liveExecutionAttempts": 23,
+  "verifiedCompletedExecutions": 22,
+  "decisions": {
+    "attempts": 18,
+    "validSelections": 16,
+    "failures": 2
+  },
+  "runs": [
+    {
+      "runId": "079fc442-d48b-4ee7-8266-29a29cabbf63",
+      "kind": "result.json",
+      "status": "cancelled",
+      "selectedRouteId": "pi-browser:configured",
+      "schemaVersion": "1.0",
+      "timing": {
+        "totalMs": 5856.699208000035,
+        "decisionMs": 3041.8393749999814,
+        "executionMs": 1203.104250000033,
+        "handoffMs": 0,
+        "verificationMs": 0.0005840000230818987
+      },
+      "cost": {
+        "status": "unknown"
+      },
+      "error": {
+        "code": "pi_rpc_cancelled"
+      },
+      "evidenceFile": "data/runs/079fc442-d48b-4ee7-8266-29a29cabbf63.json"
+    },
+    {
+      "runId": "1542882d-1fde-40ab-915b-efcda8be8786",
+      "kind": "baseline.json",
+      "status": "completed",
+      "selectedRouteId": "direct-fal",
+      "timing": {
+        "totalMs": 8549.282833,
+        "verificationMs": 3125.2277080000003
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/1542882d-1fde-40ab-915b-efcda8be8786.json"
+    },
+    {
+      "runId": "217bb2ed-07e2-40cd-9c36-7a12ff32630f",
+      "kind": "result.json",
+      "status": "defer_to_host",
+      "selectedRouteId": "native:defer",
+      "schemaVersion": "1.2",
+      "timing": {
+        "totalMs": 1206.9695420000062
+      },
+      "cost": {
+        "status": "not_applicable",
+        "usd": 0
+      },
+      "evidenceFile": "data/runs/217bb2ed-07e2-40cd-9c36-7a12ff32630f.json"
+    },
+    {
+      "runId": "242cd6de-76da-4519-bbbb-37610a136585",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-quality",
+      "schemaVersion": "1.2",
+      "timing": {
+        "totalMs": 20077.321958000073,
+        "decisionMs": 900.0190419999999,
+        "executionMs": 18331.824167000013,
+        "handoffMs": 1741.876500000013,
+        "verificationMs": 16.26366599998437
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.0120348
+      },
+      "evidenceFile": "data/runs/242cd6de-76da-4519-bbbb-37610a136585.json"
+    },
+    {
+      "runId": "3b916f16-65aa-4d2b-9581-8cda60b5f326",
+      "kind": "harness-smoke.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-quality",
+      "timing": {
+        "totalMs": 7900.938708000001,
+        "executionMs": 2932.5187079999996,
+        "handoffMs": 1405.10525,
+        "verificationMs": 3529.075917
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/3b916f16-65aa-4d2b-9581-8cda60b5f326.json"
+    },
+    {
+      "runId": "3c72fe71-2c58-46df-86e4-75ee4292842e",
+      "kind": "baseline.json",
+      "status": "completed",
+      "selectedRouteId": "direct-fal",
+      "timing": {
+        "totalMs": 14554.778833,
+        "verificationMs": 8698.480541
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/3c72fe71-2c58-46df-86e4-75ee4292842e.json"
+    },
+    {
+      "runId": "3e43988e-4ac5-4643-8bad-db63e3e621eb",
+      "kind": "harness-smoke.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-fast",
+      "timing": {
+        "totalMs": 5248.628833,
+        "executionMs": 2479.8965829999997,
+        "handoffMs": 1037.7559999999999,
+        "verificationMs": 1696.653542
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.003
+      },
+      "evidenceFile": "data/runs/3e43988e-4ac5-4643-8bad-db63e3e621eb.json"
+    },
+    {
+      "runId": "5117c78e-14d3-4388-9b4b-f5b804bb97c4",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-fast",
+      "schemaVersion": "1.1",
+      "timing": {
+        "totalMs": 11614.994124999968,
+        "decisionMs": 2839.984125000192,
+        "executionMs": 7994.9510840000585,
+        "handoffMs": 2493.20879100007,
+        "verificationMs": 14.49600000004284
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.0030315
+      },
+      "evidenceFile": "data/runs/5117c78e-14d3-4388-9b4b-f5b804bb97c4.json"
+    },
+    {
+      "runId": "67a888e5-154a-4c08-830c-39b1971251a4",
+      "kind": "harness-smoke.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-fast",
+      "timing": {
+        "totalMs": 7137.933375,
+        "executionMs": 3761.948125,
+        "handoffMs": 1315.981708,
+        "verificationMs": 2027.363625
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.003
+      },
+      "evidenceFile": "data/runs/67a888e5-154a-4c08-830c-39b1971251a4.json"
+    },
+    {
+      "runId": "69129498-15b0-43ad-a23f-a9f64e747791",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-quality",
+      "schemaVersion": "1.2",
+      "timing": {
+        "totalMs": 12005.932458000025,
+        "executionMs": 11229.161291000084,
+        "handoffMs": 1426.1182499999413,
+        "verificationMs": 16.318749999976717
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/69129498-15b0-43ad-a23f-a9f64e747791.json"
+    },
+    {
+      "runId": "6ea4c909-1352-4943-832a-fb32c602bd95",
+      "kind": "harness-smoke.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-quality",
+      "timing": {
+        "totalMs": 7312.547833,
+        "executionMs": 3660.70925,
+        "handoffMs": 863.104125,
+        "verificationMs": 2724.1253750000005
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/6ea4c909-1352-4943-832a-fb32c602bd95.json"
+    },
+    {
+      "runId": "6f38d329-8b9a-4e1d-b064-f48f72cbec93",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "pi-browser:configured",
+      "schemaVersion": "1.1",
+      "timing": {
+        "totalMs": 14482.633625000017,
+        "executionMs": 12932.313500000047,
+        "handoffMs": 317.7267909999937,
+        "verificationMs": 13.737083000014536
+      },
+      "cost": {
+        "status": "unknown"
+      },
+      "evidenceFile": "data/runs/6f38d329-8b9a-4e1d-b064-f48f72cbec93.json"
+    },
+    {
+      "runId": "9f372976-bce1-49a4-bdf4-cc1eb68136cf",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "pi-browser:configured",
+      "schemaVersion": "1.0",
+      "timing": {
+        "totalMs": 16431.728917,
+        "decisionMs": 1478.337584,
+        "executionMs": 13395.4425,
+        "handoffMs": 494.6002089999997,
+        "verificationMs": 12.516707999999198
+      },
+      "cost": {
+        "status": "unknown"
+      },
+      "evidenceFile": "data/runs/9f372976-bce1-49a4-bdf4-cc1eb68136cf.json"
+    },
+    {
+      "runId": "a4ce6dfb-37b4-4c95-bffe-8a59c0c549c2",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-quality",
+      "schemaVersion": "1.2",
+      "timing": {
+        "totalMs": 11771.229457999929,
+        "executionMs": 10971.868833000073,
+        "handoffMs": 2010.9157500000438,
+        "verificationMs": 15.34929199994076
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/a4ce6dfb-37b4-4c95-bffe-8a59c0c549c2.json"
+    },
+    {
+      "runId": "a86efc0f-e53e-4e83-9259-7d0af74e8906",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "pi-browser:configured",
+      "schemaVersion": "1.2",
+      "timing": {
+        "totalMs": 16921.848250000003,
+        "decisionMs": 3153.829208,
+        "executionMs": 12196.674583,
+        "handoffMs": 326.1584160000002,
+        "verificationMs": 13.62449999999808
+      },
+      "cost": {
+        "status": "unknown"
+      },
+      "evidenceFile": "data/runs/a86efc0f-e53e-4e83-9259-7d0af74e8906.json"
+    },
+    {
+      "runId": "a99494de-75e5-49c3-9e64-6a191728cc14",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-quality",
+      "schemaVersion": "1.2",
+      "timing": {
+        "totalMs": 11278.396792,
+        "decisionMs": 1949.5674169999984,
+        "executionMs": 8594.862542000003,
+        "handoffMs": 1421.728959,
+        "verificationMs": 14.856583999993745
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.01203
+      },
+      "evidenceFile": "data/runs/a99494de-75e5-49c3-9e64-6a191728cc14.json"
+    },
+    {
+      "runId": "bad069db-1391-4ad4-b54b-8639e678adbb",
+      "kind": "direct-comparison.json",
+      "status": "completed",
+      "selectedRouteId": "direct-provider",
+      "timing": {
+        "totalMs": 10279.416208999999
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/bad069db-1391-4ad4-b54b-8639e678adbb.json"
+    },
+    {
+      "runId": "bf16042b-1cf6-43c0-94cd-bbfd29b62944",
+      "kind": "baseline.json",
+      "status": "completed",
+      "selectedRouteId": "direct-fal",
+      "timing": {
+        "totalMs": 17272.634041999998,
+        "verificationMs": 1990.6616669999985
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/bf16042b-1cf6-43c0-94cd-bbfd29b62944.json"
+    },
+    {
+      "runId": "c23c7420-3641-4bb6-999d-90f28e4d1214",
+      "kind": "harness-smoke.json",
+      "status": "completed",
+      "selectedRouteId": "pi-browser:configured",
+      "timing": {
+        "totalMs": 13910.065042,
+        "executionMs": 13502.595249999998,
+        "handoffMs": 292.38237500000014
+      },
+      "cost": {
+        "status": "unknown"
+      },
+      "evidenceFile": "data/runs/c23c7420-3641-4bb6-999d-90f28e4d1214.json"
+    },
+    {
+      "runId": "c32e2814-8908-4760-8b42-8bb477fad560",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "pi-browser:configured",
+      "schemaVersion": "1.2",
+      "timing": {
+        "totalMs": 15257.088749999995,
+        "executionMs": 13614.295125000004,
+        "handoffMs": 332.54241699998965,
+        "verificationMs": 13.982624999989639
+      },
+      "cost": {
+        "status": "unknown"
+      },
+      "evidenceFile": "data/runs/c32e2814-8908-4760-8b42-8bb477fad560.json"
+    },
+    {
+      "runId": "d73bceb2-70fa-4693-86a8-02e3150bb667",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-quality",
+      "schemaVersion": "1.0",
+      "timing": {
+        "totalMs": 11003.574375,
+        "decisionMs": 2684.212542,
+        "executionMs": 7589.960167,
+        "handoffMs": 1723.5302079999997,
+        "verificationMs": 14.606499999999869
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.0120342
+      },
+      "evidenceFile": "data/runs/d73bceb2-70fa-4693-86a8-02e3150bb667.json"
+    },
+    {
+      "runId": "dc4a79bc-0554-41ce-acdd-486150d31a72",
+      "kind": "result.json",
+      "status": "completed",
+      "selectedRouteId": "fal-creative:image-quality",
+      "schemaVersion": "1.2",
+      "timing": {
+        "totalMs": 29480.76104100002,
+        "executionMs": 28686.891334000044,
+        "handoffMs": 2510.052958000044,
+        "verificationMs": 22.15245799999684
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/dc4a79bc-0554-41ce-acdd-486150d31a72.json"
+    },
+    {
+      "runId": "e620b22e-83e5-4c20-a97c-854714bf606e",
+      "kind": "direct-comparison.json",
+      "status": "completed",
+      "selectedRouteId": "direct-provider",
+      "timing": {
+        "totalMs": 25641.496791
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/e620b22e-83e5-4c20-a97c-854714bf606e.json"
+    },
+    {
+      "runId": "fe2489d5-3653-42dc-b5fc-5bfde8c60420",
+      "kind": "baseline.json",
+      "status": "completed",
+      "selectedRouteId": "direct-fal",
+      "timing": {
+        "totalMs": 23071.653417,
+        "verificationMs": 16493.598667000002
+      },
+      "cost": {
+        "status": "estimated",
+        "usd": 0.012
+      },
+      "evidenceFile": "data/runs/fe2489d5-3653-42dc-b5fc-5bfde8c60420.json"
+    }
+  ],
+  "composite": {
+    "browserRunId": "c32e2814-8908-4760-8b42-8bb477fad560",
+    "creativeRunId": "a99494de-75e5-49c3-9e64-6a191728cc14",
+    "routerProcessingSumMs": 26535.485541999995
+  },
+  "featured": {
+    "verifiedAt": "2026-10-12T11:22:07.009Z",
+    "resultSchema": "1.2",
+    "sourceFingerprint": "696546f0c791ac065e158f528013636c412fd48b628b09ba4b019779c1e6fc46",
+    "assets": [
+      {
+        "path": "assets/site-screenshot.png",
+        "runId": "c32e2814-8908-4760-8b42-8bb477fad560",
+        "sha256": "0f55c330049c5df19891bbfaad764042088c1fd18cfe7ecba3e552d8341809d8",
+        "width": 1280,
+        "height": 720
+      },
+      {
+        "path": "assets/generated-hero.png",
+        "runId": "a99494de-75e5-49c3-9e64-6a191728cc14",
+        "sha256": "efce6cce756f354e291999c0a9406e934563db4c5e528924b71770ede25b4824",
+        "width": 1024,
+        "height": 576
+      }
+    ],
+    "limits": [
+      "Technical evidence verifies execution/artifacts/provenance. Image aesthetics and similarity remain unverified.",
+      "Pi OAuth dollars and host Codex token usage are not measured in this workflow; total economic cost is unknown.",
+      "Original v1.1 runs and their false-negative criterion results are retained as history."
+    ]
+  },
+  "baselineComparison": {
+    "baselineRunId": "bf16042b-1cf6-43c0-94cd-bbfd29b62944",
+    "specialistRunId": "d73bceb2-70fa-4693-86a8-02e3150bb667",
+    "baselineTiming": {
+      "totalMs": 17272.634041999998,
+      "verificationMs": 1990.6616669999985
+    },
+    "specialistTiming": {
+      "totalMs": 11003.574375,
+      "decisionMs": 2684.212542,
+      "executionMs": 7589.960167,
+      "handoffMs": 1723.5302079999997,
+      "verificationMs": 14.606499999999869
+    },
+    "limits": "Single sequential trial; provider queues and cache vary. Artistic quality ungraded; no efficiency gain established."
+  },
+  "limits": [
+    "Snapshot of local development runs, not a controlled reliability benchmark.",
+    "Mechanical completion is not artistic quality or full task success.",
+    "Host Codex and Pi OAuth USD are unknown; rate estimates are not invoices.",
+    "Historical failures and cancelled runs are retained. Native Codex-only workflow status: partial."
+  ]
+}

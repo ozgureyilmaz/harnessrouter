@@ -1,0 +1,41 @@
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+artifacts/
+*.log
+
+# Local secrets; keep the public configuration template
+.env
+.env.*
+!config/.env.example
+
+# Local agent setup and build-session documents
+/.codex/
+/.claude/
+/AGENTS.md
+/CLAUDE.md
+/CODEX_BUILD_PROMPT.md
+/START_HERE.md
+/docs/IMPLEMENTATION_PLAN.md
+/docs/BUILD_LOG.md
+/docs/PI_AUDIT.md
+
+# Local presentation work and unsanitized demo records
+/.presentation-build/
+/presentation-output/
+/demo/metrics.json
+/demo/paired-agentation-comparison.json
+/demo/paired-agentation-comparison.md
+
+# Local GitHub Pages build output
+/_site/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

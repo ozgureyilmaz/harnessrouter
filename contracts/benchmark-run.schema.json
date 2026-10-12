@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harnessrouter.local/contracts/benchmark-run.schema.json",
+  "title": "Local Benchmark Run v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "benchmarkRunId",
+    "caseId",
+    "arm",
+    "repetition",
+    "promptHash",
+    "startedAt",
+    "status",
+    "outcome",
+    "harnessRunIds",
+    "usage",
+    "costComponents"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "benchmarkRunId": {
+      "type": "string",
+      "pattern": "^[a-f0-9-]{36}$"
+    },
+    "caseId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "arm": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "repetition": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "promptHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "startedAt": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 40
+    },
+    "durationMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed",
+        "timed_out",
+        "interrupted"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "verified_success",
+        "verified_failure",
+        "ungraded"
+      ]
+    },
+    "gradeEvidence": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "gradedAt": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 40
+    },
+    "codex": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "profile": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "outputPath": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "evidencePath": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "modelSource": {
+          "enum": [
+            "requested",
+            "manual_import"
+          ]
+        }
+      }
+    },
+    "harnessRunIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9-]{36}$"
+      }
+    },
+    "usage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/usageRecord"
+      }
+    },
+    "costComponents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/costComponent"
+      }
+    },
+    "mediaOutputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/mediaOutput"
+      }
+    },
+    "errorCode": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "usageImportHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "importedAt",
+          "evidencePath"
+        ],
+        "properties": {
+          "importedAt": {
+            "type": "string"
+          },
+          "evidencePath": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      }
+    },
+    "timestampSource": {
+      "enum": [
+        "run_time",
+        "import_time"
+      ]
+    }
+  },
+  "$defs": {
+    "tokenCounters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cacheWriteInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reasoningOutputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalTokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "usageRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "provider",
+        "source",
+        "measurement",
+        "completeness",
+        "tokens"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "measurement": {
+          "enum": [
+            "provider_reported",
+            "platform_estimated",
+            "manual_import",
+            "unavailable"
+          ]
+        },
+        "completeness": {
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable"
+          ]
+        },
+        "tokens": {
+          "$ref": "#/$defs/tokenCounters"
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "evidenceRef": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "costComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "source",
+        "status"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "status": {
+          "enum": [
+            "provider_reported",
+            "rate_estimate",
+            "unknown"
+          ]
+        },
+        "usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "requestId": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "mediaOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "kind",
+        "count"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requestIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

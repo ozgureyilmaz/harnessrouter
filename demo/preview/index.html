@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#fbfbfa" />
+    <meta
+      name="description"
+      content="Recorded harnessrouter demo: one coding-agent session, independent harnesses, and inspectable results."
+    />
+    <title>harnessrouter — recorded demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #fbfbfa;
+        --surface: #fff;
+        --ink: #171717;
+        --muted: #777773;
+        --faint: #a6a6a1;
+        --line: #e8e8e5;
+        --line-strong: #d8d8d3;
+        --blue: #3969e8;
+        --blue-soft: #eef3ff;
+        --green: #20854b;
+        --green-soft: #edf8f0;
+        --amber: #a46713;
+        --amber-soft: #fff6e7;
+        --radius: 9px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        min-width: 320px;
+        background: var(--paper);
+        color: var(--ink);
+        font-size: 14px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+      button, a { font: inherit; }
+      a { color: inherit; }
+
+      .site-header {
+        position: sticky;
+        z-index: 3;
+        top: 0;
+        display: flex;
+        min-height: 60px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        border-bottom: 1px solid var(--line);
+        background: rgb(251 251 250 / 94%);
+        padding: 0 max(24px, calc((100vw - 1056px) / 2));
+        backdrop-filter: blur(10px);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        flex: 0 0 auto;
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: -0.055em;
+      }
+      .brand-mark {
+        position: relative;
+        width: 19px;
+        height: 19px;
+      }
+      .brand-mark::before, .brand-mark::after {
+        position: absolute;
+        width: 9px;
+        height: 9px;
+        border: 1.5px solid currentColor;
+        border-radius: 50%;
+        content: "";
+      }
+      .brand-mark::before { left: 0; top: 2px; }
+      .brand-mark::after { right: 0; bottom: 2px; background: var(--paper); }
+      .site-nav { display: flex; align-items: center; gap: 18px; }
+      .site-nav a { color: #666661; text-decoration: none; font-size: 11px; }
+      .site-nav a:hover { color: var(--ink); }
+      .site-nav .repo-link { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); border-radius: 6px; background: #fff; color: #33332f; padding: 7px 10px; font-weight: 550; }
+      .site-nav .repo-link:hover { border-color: #b8b8b1; }
+      .eyebrow, .section-kicker {
+        color: var(--faint);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 10px;
+        letter-spacing: .075em;
+        text-transform: uppercase;
+      }
+      .mono { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; }
+
+      main { width: min(1056px, 100%); margin: 0 auto; padding: 52px 24px 64px; }
+      .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+      .eyebrow { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+      .eyebrow-mark { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+      h1 { margin: 0; font-size: clamp(30px, 4.2vw, 42px); font-weight: 550; letter-spacing: -.055em; line-height: 1.1; }
+      .intro { max-width: 650px; margin: 11px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+      .button {
+        display: inline-flex;
+        min-height: 35px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        background: var(--surface);
+        color: #33332f;
+        cursor: pointer;
+        padding: 0 12px;
+        font-size: 11px;
+        font-weight: 550;
+        transition: border-color .16s ease, background .16s ease, transform .16s ease;
+      }
+      .button:hover { border-color: #b8b8b1; background: #fff; }
+      .button:active { transform: translateY(1px); }
+      .button-primary { border-color: #222; background: #222; color: #fff; }
+      .button-primary:hover { border-color: #3b3b38; background: #3b3b38; }
+      .button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+      .button:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+      .preview-note {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #866230;
+        margin-top: 11px;
+        font-size: 10px;
+        line-height: 1.45;
+      }
+      .preview-note svg { flex: 0 0 auto; width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+      .preview-note strong { font-weight: 620; }
+
+      .evidence-section { margin-top: 29px; }
+      .section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; margin-bottom: 9px; }
+      .section-head h2 { margin: 0; font-size: 13px; font-weight: 570; letter-spacing: -.02em; }
+      .section-note { color: var(--muted); font-size: 10px; }
+      .evidence-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+      .evidence-cell { min-height: 69px; padding: 12px 14px; }
+      .evidence-cell + .evidence-cell { border-left: 1px solid var(--line); }
+      .evidence-name { color: #85857f; font-size: 9px; }
+      .evidence-value { margin-top: 5px; color: #33332f; font-family: ui-monospace, monospace; font-size: 11px; }
+      .evidence-sub { margin-top: 1px; color: #999992; font-size: 8px; }
+      .honesty { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-top: 11px; }
+      .honesty-item { display: flex; gap: 8px; border-top: 1px solid var(--line); padding: 9px 1px 0; color: #777770; font-size: 9px; line-height: 1.55; }
+      .honesty-item strong { color: #4c4c47; font-weight: 560; }
+      .honesty-mark { flex: 0 0 auto; color: var(--amber); }
+
+      .footer { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); margin-top: 40px; padding-top: 13px; color: #999992; font-size: 9px; }
+      .footer a { text-decoration-color: #ccc; text-underline-offset: 2px; }
+
+      .comparison-section { margin: 28px 0 0; scroll-margin-top: 76px; }
+      .comparison-stage { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); }
+      .comparison-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding: 15px 17px; }
+      .comparison-top h2 { margin: 4px 0 0; font-size: 17px; font-weight: 570; letter-spacing: -.035em; }
+      .comparison-top .eyebrow { margin: 0; font-size: 9px; }
+      .comparison-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+      .comparison-controls .button { min-height: 31px; font-size: 10px; }
+      .comparison-prompt { border-bottom: 1px solid var(--line); background: #fdfdfc; padding: 10px 17px; }
+      .comparison-prompt-label { margin-bottom: 3px; color: #999992; font-family: ui-monospace, monospace; font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+      .comparison-prompt-text { color: #41413d; font-size: 10px; line-height: 1.5; }
+      .comparison-lanes { display: grid; grid-template-columns: 1fr 1fr; }
+      .comparison-lane { min-width: 0; }
+      .comparison-lane + .comparison-lane { border-left: 1px solid var(--line); }
+      .comparison-lane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 43px; border-bottom: 1px solid var(--line); padding: 0 14px; }
+      .comparison-lane-title { display: flex; align-items: center; gap: 7px; color: #363632; font-size: 11px; font-weight: 600; }
+      .lane-mark { width: 7px; height: 7px; border-radius: 50%; background: #9a9a93; }
+      .router-lane .lane-mark { background: var(--green); }
+      .lane-status { flex: 0 0 auto; border-radius: 4px; background: #f1f1ee; color: #73736d; padding: 3px 6px; font-family: ui-monospace, monospace; font-size: 8px; }
+      .lane-status.is-recorded { background: var(--green-soft); color: var(--green); }
+      .lane-status.is-pending { background: var(--amber-soft); color: var(--amber); }
+      .lane-status.is-partial { background: var(--amber-soft); color: var(--amber); }
+      .lane-status.is-failed { background: #fff0f0; color: #bd4141; }
+      .comparison-steps { padding: 3px 14px 0; }
+      .compare-step { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: start; gap: 7px; min-height: 42px; border-bottom: 1px solid #f1f1ee; padding: 8px 0 7px; transition: background .2s ease, opacity .2s ease; }
+      .compare-step:last-child { border-bottom: 0; }
+      .compare-step.is-pending { opacity: .58; }
+      .compare-step.is-active { border-radius: 5px; background: #f3f6ff; opacity: 1; }
+      .compare-step.is-complete { opacity: 1; }
+      .compare-step.is-unsupported, .compare-step.is-failed { opacity: 1; }
+      .compare-dot { display: grid; width: 17px; height: 17px; place-items: center; border: 1px solid #d8d8d3; border-radius: 50%; color: #8c8c85; font-size: 9px; line-height: 1; }
+      .compare-step.is-complete .compare-dot { border-color: #b8dfc4; background: var(--green-soft); color: var(--green); }
+      .compare-step.is-active .compare-dot { border-color: #b5c7fb; background: var(--blue-soft); color: var(--blue); }
+      .compare-step.is-unsupported .compare-dot { border-color: #ead4ae; background: var(--amber-soft); color: var(--amber); }
+      .compare-step.is-failed .compare-dot { border-color: #ecc2c2; background: #fff0f0; color: #bd4141; }
+      .compare-step-title { color: #44443f; font-size: 9px; font-weight: 580; line-height: 1.35; }
+      .compare-step-detail { margin-top: 2px; color: #85857e; font-size: 8px; line-height: 1.4; }
+      .compare-step-meta { padding-top: 2px; color: #96968f; font-family: ui-monospace, monospace; font-size: 7px; white-space: nowrap; }
+      .comparison-result { display: flex; min-height: 55px; align-items: center; justify-content: space-between; gap: 9px; border-top: 1px solid var(--line); padding: 8px 13px; }
+      .comparison-result-title { color: #484843; font-size: 9px; font-weight: 590; }
+      .comparison-result-note { margin-top: 2px; color: #898982; font-size: 8px; line-height: 1.4; }
+      .comparison-thumbs { display: flex; flex: 0 0 auto; gap: 5px; }
+      .comparison-thumb { width: 58px; height: 34px; overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: #f5f5f3; }
+      .comparison-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+      .comparison-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); background: #fdfdfc; padding: 9px 15px; color: #85857e; font-size: 8px; }
+      .comparison-footer a { color: var(--blue); text-decoration: none; }
+      .comparison-footer a:hover { text-decoration: underline; }
+      .capture-exit { display: none; }
+      body.capture-mode { overflow: hidden; background: #f4f4f1; }
+      body.capture-mode .site-header,
+      body.capture-mode .page-head,
+      body.capture-mode .preview-note,
+      body.capture-mode .task-brief,
+      body.capture-mode #evidence,
+      body.capture-mode .footer { display: none !important; }
+      body.capture-mode main { display: grid; width: 100%; min-height: 100vh; place-items: center; margin: 0; padding: 12px; }
+      body.capture-mode .comparison-section { width: min(calc(100vw - 24px), calc((100vh - 24px) * 16 / 9)); aspect-ratio: 16 / 9; margin: 0; }
+      body.capture-mode .comparison-stage { display: flex; width: 100%; height: 100%; flex-direction: column; border-radius: 7px; box-shadow: 0 8px 32px rgb(0 0 0 / 7%); }
+      body.capture-mode .comparison-top { min-height: 54px; padding: 9px 13px; }
+      body.capture-mode .comparison-top h2 { font-size: 14px; }
+      body.capture-mode .comparison-prompt { padding: 7px 13px; }
+      body.capture-mode .comparison-lanes { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; }
+      body.capture-mode .comparison-lane { display: flex; min-height: 0; flex-direction: column; }
+      body.capture-mode .comparison-lane-head { min-height: 34px; padding: 0 10px; }
+      body.capture-mode .comparison-steps { flex: 1; min-height: 0; padding: 2px 10px 0; }
+      body.capture-mode .compare-step { min-height: 0; grid-template-columns: 17px minmax(0,1fr) auto; gap: 5px; padding: 5px 0; }
+      body.capture-mode .compare-dot { width: 14px; height: 14px; font-size: 8px; }
+      body.capture-mode .compare-step-title { font-size: 8px; }
+      body.capture-mode .compare-step-detail { font-size: 7px; }
+      body.capture-mode .comparison-result { min-height: 43px; padding: 5px 10px; }
+      body.capture-mode .comparison-footer { min-height: 30px; padding: 6px 12px; }
+      body.capture-mode .capture-exit { display: inline-flex; }
+      body.capture-mode #enterCapture { display: none; }
+
+      @media (max-width: 960px) {
+        .comparison-top { align-items: flex-start; flex-direction: column; }
+        .comparison-controls { justify-content: flex-start; }
+      }
+      @media (max-width: 680px) {
+        .site-header { min-height: 54px; padding: 0 16px; }
+        .site-nav { gap: 10px; }
+        .site-nav a { font-size: 10px; }
+        main { padding: 36px 16px 44px; }
+        .page-head { align-items: flex-start; flex-direction: column; gap: 17px; margin-bottom: 23px; }
+        .preview-note { margin-bottom: 16px; }
+        .evidence-grid { grid-template-columns: 1fr 1fr; }
+        .evidence-cell:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+        .evidence-cell:nth-child(4) { border-top: 1px solid var(--line); }
+        .honesty { grid-template-columns: 1fr; gap: 8px; }
+        .footer { flex-direction: column; }
+        .comparison-lanes { grid-template-columns: 1fr; }
+        .comparison-lane + .comparison-lane { border-top: 1px solid var(--line); border-left: 0; }
+        body.capture-mode .comparison-lanes { grid-template-columns: 1fr 1fr; }
+        body.capture-mode .compare-step-detail { display: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+      }
+    </style>
+    <link rel="stylesheet" href="browser-comparison.css" />
+    <script src="browser-comparison.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#overview" aria-label="harnessrouter home">
+        <span class="brand-mark" aria-hidden="true"></span><span>harnessrouter</span>
+      </a>
+      <nav class="site-nav" aria-label="Project links">
+        <a href="evidence.html">Run evidence <span aria-hidden="true">↗</span></a>
+        <a class="repo-link" href="https://github.com/ozgureyilmaz/harnessrouter" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </header>
+      <main id="overview">
+        <div class="page-head">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-mark"></span>Cross-harness interoperability</div>
+            <h1>One agent session.</h1>
+            <p class="intro">Coding, testing, research, and automation can need different tools and execution environments. Codex stays in control while harnessrouter connects independent harnesses through MCP. This recorded example follows a browser-to-creative handoff.</p>
+          </div>
+        </div>
+
+        <div class="preview-note" role="note">
+          <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 7v4M8 4.8h.01"/></svg>
+          <div><strong>Recorded demo.</strong> The comparison plays saved run data and makes no provider calls. Animation speed is illustrative.</div>
+        </div>
+
+        <section class="evidence-section" id="evidence" aria-labelledby="evidenceHeading">
+          <div class="section-head"><h2 id="evidenceHeading">Recorded run evidence</h2><span class="section-note">from local traces · 12 Oct 2026</span></div>
+          <div class="evidence-grid">
+            <div class="evidence-cell"><div class="evidence-name">Browser specialist</div><div class="evidence-value">15.26 s</div><div class="evidence-sub">Pi · single eligible route</div></div>
+            <div class="evidence-cell"><div class="evidence-name">Creative specialist</div><div class="evidence-value">11.28 s</div><div class="evidence-sub">Decisions + fal + verification</div></div>
+            <div class="evidence-cell"><div class="evidence-name">fal fee estimate</div><div class="evidence-value">$0.012</div><div class="evidence-sub">published rate · not invoice</div></div>
+            <div class="evidence-cell"><div class="evidence-name">Pi / total USD cost</div><div class="evidence-value">Unknown</div><div class="evidence-sub">OAuth usage not priced</div></div>
+          </div>
+          <div class="honesty">
+            <div class="honesty-item"><span class="honesty-mark">↳</span><span><strong>What this proves:</strong> this recorded local run passed browser observations to an independent image harness and returned decoded artifacts through Codex’s MCP flow.</span></div>
+            <div class="honesty-item"><span class="honesty-mark">↳</span><span><strong>What it does not prove:</strong> better image quality, lower total cost, or a general speed improvement. The preview animation is illustrative; timings above come from the saved traces.</span></div>
+          </div>
+        </section>
+
+        <section class="comparison-section browser-experiment" id="browserComparison" data-browser-experiment="preview" aria-label="Actual browser workflow comparison"></section>
+
+        <section class="comparison-section" id="comparison" aria-labelledby="comparisonHeading">
+          <div class="comparison-stage">
+            <div class="comparison-top">
+              <div>
+                <div class="eyebrow"><span class="eyebrow-mark"></span>Same task · two execution paths</div>
+                <h2 id="comparisonHeading">Browser → image workflow · separate task</h2>
+              </div>
+              <div class="comparison-controls">
+                <button class="button button-primary" id="capturePlay" type="button"><svg viewBox="0 0 16 16"><path d="m5 3.4 7.2 4.1L5 11.6z"/></svg>Play comparison</button>
+                <button class="button capture-exit" id="exitCapture" type="button">Exit GIF view</button>
+                <button class="button" id="enterCapture" type="button">GIF preview mode</button>
+              </div>
+            </div>
+            <div class="comparison-prompt">
+              <div class="comparison-prompt-label">Shared task prompt</div>
+              <div class="comparison-prompt-text">Inspect https://example.com in a fresh browser session, measure its visual style, then create a matching 16:9 hero illustration from those observations.</div>
+            </div>
+            <div class="comparison-lanes">
+              <article class="comparison-lane codex-lane" aria-labelledby="codexLaneTitle">
+                <div class="comparison-lane-head">
+                  <div class="comparison-lane-title" id="codexLaneTitle"><span class="lane-mark"></span>Codex only</div>
+                  <span class="lane-status is-pending" id="codexRunState">Awaiting local run</span>
+                </div>
+                <div class="comparison-steps" id="codexSteps" aria-live="polite">
+                  <div class="compare-step is-pending" data-baseline-step="inspect-site" data-state="pending">
+                    <span class="compare-dot">1</span><div><div class="compare-step-title">Inspect the public site</div><div class="compare-step-detail">Use only tools available natively in this Codex session.</div></div><span class="compare-step-meta">pending</span>
+                  </div>
+                  <div class="compare-step is-pending" data-baseline-step="measure-style" data-state="pending">
+                    <span class="compare-dot">2</span><div><div class="compare-step-title">Measure its visual style</div><div class="compare-step-detail">Record observed palette, typography, and layout.</div></div><span class="compare-step-meta">pending</span>
+                  </div>
+                  <div class="compare-step is-pending" data-baseline-step="create-image" data-state="pending">
+                    <span class="compare-dot">3</span><div><div class="compare-step-title">Create the matching hero image</div><div class="compare-step-detail">If native image generation is unavailable, record that limit.</div></div><span class="compare-step-meta">pending</span>
+                  </div>
+                  <div class="compare-step is-pending" data-baseline-step="verify-output" data-state="pending">
+                    <span class="compare-dot">4</span><div><div class="compare-step-title">Verify the output</div><div class="compare-step-detail">Only completed steps and real artifacts count as evidence.</div></div><span class="compare-step-meta">pending</span>
+                  </div>
+                </div>
+                <div class="comparison-result" id="codexResult">
+                  <div><div class="comparison-result-title">No Codex-only run recorded</div><div class="comparison-result-note">No completion, duration, cost, or artifact is claimed yet.</div></div>
+                </div>
+              </article>
+
+              <article class="comparison-lane router-lane" aria-labelledby="routerLaneTitle">
+                <div class="comparison-lane-head">
+                  <div class="comparison-lane-title" id="routerLaneTitle"><span class="lane-mark"></span>Codex + harnessrouter</div>
+                  <span class="lane-status is-recorded">Recorded · verified</span>
+                </div>
+                <div class="comparison-steps" id="routerSteps" aria-live="polite">
+                  <div class="compare-step is-complete" data-router-step="0" data-state="complete"><span class="compare-dot">✓</span><div><div class="compare-step-title">Codex keeps the user task and context</div><div class="compare-step-detail">The same Codex session calls local MCP for each subtask.</div></div><span class="compare-step-meta">host</span></div>
+                  <div class="compare-step is-complete" data-router-step="1" data-state="complete"><span class="compare-dot">✓</span><div><div class="compare-step-title">Policy selects the sole eligible Pi route</div><div class="compare-step-detail">No paid Decisions request is needed for this browser run.</div></div><span class="compare-step-meta">Pi</span></div>
+                  <div class="compare-step is-complete" data-router-step="2" data-state="complete"><span class="compare-dot">✓</span><div><div class="compare-step-title">Pi returns site observations + screenshot</div><div class="compare-step-detail">Measured visual context is saved with the browser run.</div></div><span class="compare-step-meta">15.26 s</span></div>
+                  <div class="compare-step is-complete" data-router-step="3" data-state="complete"><span class="compare-dot">✓</span><div><div class="compare-step-title">Codex carries context into the next task</div><div class="compare-step-detail">The creative run links back with the browser parentRunId.</div></div><span class="compare-step-meta">linked</span></div>
+                  <div class="compare-step is-complete" data-router-step="4" data-state="complete"><span class="compare-dot">✓</span><div><div class="compare-step-title">Decisions selects fal-creative</div><div class="compare-step-detail">The route binds the image harness to FLUX.2.</div></div><span class="compare-step-meta">FLUX.2</span></div>
+                  <div class="compare-step is-complete" data-router-step="5" data-state="complete"><span class="compare-dot">✓</span><div><div class="compare-step-title">Image is generated and decoded locally</div><div class="compare-step-detail">Returned 1024 × 576 PNG passes artifact verification.</div></div><span class="compare-step-meta">11.28 s</span></div>
+                </div>
+                <div class="comparison-result">
+                  <div><div class="comparison-result-title">2 verified artifacts</div><div class="comparison-result-note">Separate real runs · parent/child context confirmed.</div></div>
+                  <div class="comparison-thumbs">
+                    <a class="comparison-thumb" href="assets/site-screenshot.png" target="_blank" rel="noreferrer" aria-label="Open the recorded Pi screenshot"><img src="assets/site-screenshot.png" alt="Recorded site screenshot" /></a>
+                    <a class="comparison-thumb" href="assets/generated-hero.png" target="_blank" rel="noreferrer" aria-label="Open the verified generated image"><img src="assets/generated-hero.png" alt="Verified generated hero" /></a>
+                  </div>
+                </div>
+              </article>
+            </div>
+            <div class="comparison-footer"><span id="comparisonPlaybackState">Recorded router output · Codex-only run data has not been supplied.</span></div>
+          </div>
+        </section>
+
+        <footer class="footer"><span>Recorded schema 1.2 workflow · measured results and sanitized run records are available on the evidence page.</span></footer>
+      </main>
+
+    <script>
+      const capturePlayButton = document.getElementById("capturePlay");
+      const captureExitButton = document.getElementById("exitCapture");
+      const enterCaptureButton = document.getElementById("enterCapture");
+      const comparisonState = document.getElementById("comparisonPlaybackState");
+      const routerSteps = [...document.querySelectorAll("[data-router-step]")];
+      const baselineSteps = [...document.querySelectorAll("[data-baseline-step]")];
+      const baselineState = document.getElementById("codexRunState");
+      const baselineResult = document.getElementById("codexResult");
+      let comparisonTimers = [];
+      let baselineRun = null;
+
+      function stepStateName(value) {
+        if (["completed", "complete", "verified", "passed"].includes(value)) return "complete";
+        if (["unsupported", "not_available", "unavailable"].includes(value)) return "unsupported";
+        if (["failed", "error"].includes(value)) return "failed";
+        return "pending";
+      }
+
+      function setCompareStep(element, state) {
+        element.classList.remove("is-pending", "is-active", "is-complete", "is-unsupported", "is-failed");
+        element.classList.add(`is-${state}`);
+        element.dataset.state = state;
+        const dot = element.querySelector(".compare-dot");
+        const lane = element.matches("[data-baseline-step]") ? baselineSteps : routerSteps;
+        if (state === "pending") dot.textContent = String(lane.indexOf(element) + 1);
+        else if (state === "complete") dot.textContent = "✓";
+        else if (state === "unsupported") dot.textContent = "–";
+        else if (state === "failed") dot.textContent = "×";
+        else if (state === "active") dot.textContent = "·";
+      }
+
+      function safeLocalArtifact(path) {
+        if (typeof path !== "string" || !/^assets\/[\w.-]+$/.test(path)) return null;
+        return path;
+      }
+
+      function renderBaselineArtifacts(artifacts) {
+        baselineResult.replaceChildren();
+        const summary = document.createElement("div");
+        const title = document.createElement("div");
+        title.className = "comparison-result-title";
+        const note = document.createElement("div");
+        note.className = "comparison-result-note";
+        const visibleArtifacts = Array.isArray(artifacts) ? artifacts.filter((item) => safeLocalArtifact(item.path)) : [];
+        if (visibleArtifacts.length) {
+          title.textContent = `${visibleArtifacts.length} local artifact${visibleArtifacts.length === 1 ? "" : "s"} recorded`;
+          note.textContent = "Outputs from the native Codex-only run.";
+        } else if (baselineRun?.status === "awaiting_user_run") {
+          title.textContent = "No Codex-only run recorded";
+          note.textContent = "No completion, duration, cost, or artifact is claimed yet.";
+        } else {
+          title.textContent = "Codex-only run has no verified artifact";
+          note.textContent = baselineRun?.outcomeNote || "The run record contains no local output artifact.";
+        }
+        summary.append(title, note);
+        baselineResult.append(summary);
+        if (visibleArtifacts.length) {
+          const thumbs = document.createElement("div");
+          thumbs.className = "comparison-thumbs";
+          visibleArtifacts.slice(0, 2).forEach((item) => {
+            const href = safeLocalArtifact(item.path);
+            const link = document.createElement("a");
+            link.className = "comparison-thumb";
+            link.href = href;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            link.setAttribute("aria-label", `Open ${item.label || "recorded local artifact"}`);
+            if (/\.(png|jpe?g|webp|gif)$/i.test(item.path)) {
+              const image = document.createElement("img");
+              image.src = href;
+              image.alt = item.label || "Codex-only output artifact";
+              link.append(image);
+            } else {
+              link.textContent = item.label || "Open file";
+            }
+            thumbs.append(link);
+          });
+          baselineResult.append(thumbs);
+        }
+      }
+
+      function applyBaselineData(data) {
+        baselineRun = data;
+        const state = data.status || "awaiting_user_run";
+        baselineState.className = "lane-status";
+        if (state === "awaiting_user_run") {
+          baselineState.textContent = "Awaiting local run";
+          baselineState.classList.add("is-pending");
+        } else if (state === "partial") {
+          baselineState.textContent = "Partial · recorded";
+          baselineState.classList.add("is-partial");
+        } else if (state === "completed") {
+          baselineState.textContent = "Recorded · Codex only";
+          baselineState.classList.add("is-recorded");
+        } else if (state === "failed") {
+          baselineState.textContent = "Failed · recorded";
+          baselineState.classList.add("is-failed");
+        } else {
+          baselineState.textContent = `${state} · recorded`;
+          baselineState.classList.add("is-partial");
+        }
+
+        const byId = new Map((Array.isArray(data.steps) ? data.steps : []).map((step) => [step.id, step]));
+        baselineSteps.forEach((element) => {
+          const step = byId.get(element.dataset.baselineStep);
+          if (!step) return;
+          const stateName = stepStateName(step.status);
+          setCompareStep(element, stateName);
+          if (step.label) element.querySelector(".compare-step-title").textContent = step.label;
+          if (step.summary || step.detail) element.querySelector(".compare-step-detail").textContent = step.summary || step.detail;
+          const meta = element.querySelector(".compare-step-meta");
+          if (Number.isFinite(step.durationMs)) meta.textContent = `${(step.durationMs / 1000).toFixed(2)} s`;
+          else meta.textContent = stateName === "complete" ? "recorded" : stateName === "unsupported" ? "unavailable" : stateName === "failed" ? "failed" : "pending";
+        });
+        renderBaselineArtifacts(data.artifacts);
+        const model = data.execution?.codexModel || data.codexModel;
+        if (state !== "awaiting_user_run") {
+          comparisonState.textContent = `Codex-only ${state}${model ? ` · ${model}` : ""}; router playback is illustrative.`;
+        } else {
+          comparisonState.textContent = "Recorded router output · Codex-only run data has not been supplied.";
+        }
+      }
+
+      async function loadBaselineData() {
+        try {
+          const response = await fetch("data/codex-only-run.json", { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          applyBaselineData(await response.json());
+        } catch {
+          comparisonState.textContent = "Run data could not be loaded. Reload this page over HTTP or check the published demo files.";
+        }
+      }
+
+      function clearComparisonTimers() {
+        comparisonTimers.forEach(clearTimeout);
+        comparisonTimers = [];
+      }
+
+      function resetComparison() {
+        clearComparisonTimers();
+        routerSteps.forEach((element) => setCompareStep(element, "complete"));
+        if (baselineRun) applyBaselineData(baselineRun);
+        capturePlayButton.disabled = false;
+        capturePlayButton.innerHTML = '<svg viewBox="0 0 16 16"><path d="m5 3.4 7.2 4.1L5 11.6z"/></svg>Play comparison';
+        comparisonState.textContent = baselineRun && baselineRun.status !== "awaiting_user_run"
+          ? `Recorded Codex-only ${baselineRun.status} · local data; animation is illustrative.`
+          : "Recorded router output · Codex-only run data has not been supplied.";
+      }
+
+      function playComparison() {
+        resetComparison();
+        routerSteps.forEach((element) => setCompareStep(element, "pending"));
+        const baselineHasRun = baselineRun && baselineRun.status !== "awaiting_user_run";
+        if (baselineHasRun) baselineSteps.forEach((element) => setCompareStep(element, "pending"));
+        capturePlayButton.disabled = true;
+        capturePlayButton.textContent = "Playing…";
+        comparisonState.textContent = baselineHasRun
+          ? "Playing recorded paths · step animation is illustrative, not a timing comparison."
+          : "Showing the recorded router path · Codex-only run is still awaiting evidence.";
+
+        routerSteps.forEach((element, index) => {
+          comparisonTimers.push(setTimeout(() => {
+            if (index > 0) setCompareStep(routerSteps[index - 1], "complete");
+            setCompareStep(element, "active");
+          }, index * 620));
+        });
+
+        if (baselineHasRun) {
+          const recordedSteps = Array.isArray(baselineRun.steps) ? baselineRun.steps : [];
+          baselineSteps.forEach((element, index) => {
+            const recorded = recordedSteps.find((step) => step.id === element.dataset.baselineStep);
+            const finalState = recorded ? stepStateName(recorded.status) : "pending";
+            comparisonTimers.push(setTimeout(() => {
+              if (index > 0) {
+                const previous = recordedSteps.find((step) => step.id === baselineSteps[index - 1].dataset.baselineStep);
+                setCompareStep(baselineSteps[index - 1], previous ? stepStateName(previous.status) : "pending");
+              }
+              setCompareStep(element, finalState === "pending" ? "active" : "active");
+            }, index * 620));
+            comparisonTimers.push(setTimeout(() => setCompareStep(element, finalState), index * 620 + 430));
+          });
+        }
+
+        comparisonTimers.push(setTimeout(() => {
+          routerSteps.forEach((element) => setCompareStep(element, "complete"));
+          if (baselineHasRun) applyBaselineData(baselineRun);
+          capturePlayButton.disabled = false;
+          capturePlayButton.innerHTML = '<svg viewBox="0 0 16 16"><path d="m5 3.4 7.2 4.1L5 11.6z"/></svg>Play comparison';
+          comparisonState.textContent = baselineHasRun
+            ? "Recorded paths shown · measured values remain on the evidence page."
+            : "Routed flow replayed · Codex-only run remains pending, not assumed failed.";
+        }, routerSteps.length * 620 + 500));
+      }
+
+      if (capturePlayButton) capturePlayButton.addEventListener("click", playComparison);
+      if (enterCaptureButton) enterCaptureButton.addEventListener("click", () => document.body.classList.add("capture-mode"));
+      if (captureExitButton) captureExitButton.addEventListener("click", () => document.body.classList.remove("capture-mode"));
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") document.body.classList.remove("capture-mode");
+      });
+      loadBaselineData();
+
+    </script>
+  </body>
+</html>

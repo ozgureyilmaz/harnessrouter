@@ -1,0 +1,50 @@
+{
+  "name": "harnessrouter",
+  "version": "1.0.0",
+  "description": "Task-aware MCP gateway for independently verified agent harness execution",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
+    "test": "tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "smoke:dry": "tsx scripts/smoke.ts dry",
+    "smoke:live": "tsx scripts/smoke.ts live",
+    "demo:precheck": "tsx scripts/precheck.ts",
+    "demo:metrics": "tsx scripts/metrics.ts",
+    "demo:export": "node scripts/export-demo.mjs",
+    "demo:check": "node scripts/check-demo.mjs",
+    "mcp:smoke": "tsx scripts/mcp-smoke.ts",
+    "mcp:call": "tsx scripts/mcp-call.ts",
+    "baseline": "tsx scripts/baseline.ts",
+    "eval:live": "tsx scripts/eval.ts",
+    "eval:harnesses": "tsx scripts/evaluate-harnesses.ts",
+    "benchmark": "tsx scripts/benchmark.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@fal-ai/client": "1.10.1",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "ajv": "8.20.0",
+    "dotenv": "18.0.7",
+    "openai": "7.32.0",
+    "playwright": "1.64.0",
+    "sharp": "0.35.5",
+    "typebox": "1.3.27",
+    "yaml": "2.9.1",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

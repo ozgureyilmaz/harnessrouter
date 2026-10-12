@@ -1,0 +1,16 @@
+{
+  "runId": "3b916f16-65aa-4d2b-9581-8cda60b5f326",
+  "kind": "harness-smoke.json",
+  "status": "completed",
+  "selectedRouteId": "fal-creative:image-quality",
+  "timing": {
+    "totalMs": 7900.938708000001,
+    "executionMs": 2932.5187079999996,
+    "handoffMs": 1405.10525,
+    "verificationMs": 3529.075917
+  },
+  "cost": {
+    "status": "estimated",
+    "usd": 0.012
+  }
+}

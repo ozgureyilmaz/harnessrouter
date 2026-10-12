@@ -1,0 +1,4 @@
+{
+  "caseId": "public-page-to-campaign-image",
+  "prompt": "Inspect https://example.com. Report its visible page title and one concise observation about its visual style. Then create one 16:9 campaign image inspired by that observation. Return the observation, image artifact, and the public source URL. Do not sign in, interact with forms, or visit another domain."
+}

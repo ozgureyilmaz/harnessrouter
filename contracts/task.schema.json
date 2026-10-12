@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harnessrouter.local/contracts/task.schema.json",
+  "title": "HarnessTask v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "prompt",
+    "requirements",
+    "acceptanceCriteria"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 12000
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requiredCapabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "context": {
+      "type": "object"
+    },
+    "allowedDomains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "desiredOutput": {
+      "enum": [
+        "text",
+        "screenshot",
+        "image",
+        "video",
+        "mixed"
+      ]
+    },
+    "maxCostUsd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1000
+    },
+    "allowPaidExecution": {
+      "type": "boolean",
+      "default": false
+    },
+    "parentRunId": {
+      "type": "string"
+    }
+  }
+}

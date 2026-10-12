@@ -1,0 +1,382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harnessrouter.local/contracts/result.schema.json",
+  "title": "HarnessResult v1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "taskId",
+    "status",
+    "selectedRouteId",
+    "artifacts",
+    "criterionResults",
+    "timing",
+    "cost"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "enum": [
+        "1.1",
+        "1.2"
+      ]
+    },
+    "runId": {
+      "type": "string"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "failed",
+        "rejected",
+        "defer_to_host",
+        "permission_required",
+        "cancelled"
+      ]
+    },
+    "selectedRouteId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selectedHarnessId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "selectedModelId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "structuredOutput": {
+      "type": "object"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "verified"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "image",
+              "video",
+              "screenshot",
+              "text",
+              "other"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "providerRequestId": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "criterionResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterion",
+          "status",
+          "verifier"
+        ],
+        "properties": {
+          "criterion": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "unverified"
+            ]
+          },
+          "verifier": {
+            "enum": [
+              "artifact",
+              "browser_observation",
+              "provider_metadata",
+              "planner_provenance",
+              "none"
+            ]
+          },
+          "evidence": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "totalMs"
+      ],
+      "properties": {
+        "totalMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "decisionMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "handoffMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "executionMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "verificationMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "known",
+            "estimated",
+            "unknown",
+            "not_applicable"
+          ]
+        },
+        "usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "details": {
+          "type": "string"
+        }
+      }
+    },
+    "usage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/usageRecord"
+      }
+    },
+    "costComponents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/costComponent"
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "tracePath": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "tokenCounters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cachedInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cacheWriteInputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reasoningOutputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalTokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "usageRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "provider",
+        "source",
+        "measurement",
+        "completeness",
+        "tokens"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "measurement": {
+          "enum": [
+            "provider_reported",
+            "platform_estimated",
+            "manual_import",
+            "unavailable"
+          ]
+        },
+        "completeness": {
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable"
+          ]
+        },
+        "tokens": {
+          "$ref": "#/$defs/tokenCounters"
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "evidenceRef": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "costComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "source",
+        "status"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "model": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "status": {
+          "enum": [
+            "provider_reported",
+            "rate_estimate",
+            "unknown"
+          ]
+        },
+        "usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "requestId": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "const": "1.2"
+          }
+        },
+        "required": [
+          "schemaVersion"
+        ]
+      },
+      "then": {
+        "required": [
+          "usage",
+          "costComponents"
+        ],
+        "properties": {
+          "usage": {},
+          "costComponents": {}
+        }
+      }
+    }
+  ]
+}

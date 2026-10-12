@@ -1,0 +1,47 @@
+name: Publish recorded demo to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - demo/preview/**
+      - scripts/check-demo.mjs
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check portable demo and public file boundary
+        run: node scripts/check-demo.mjs
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload static demo only
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: demo/preview
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

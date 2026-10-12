@@ -1,0 +1,112 @@
+{
+  "note": "Pre-labeled routing-family fixture. Not evidence of live performance. Eligibility depends on policy, credentials, current route availability and allowed domains.",
+  "tasks": [
+    {
+      "id": "B-01",
+      "task": "Open a public website and take a screenshot.",
+      "requirements": [
+        "browser",
+        "screenshot"
+      ],
+      "expectedRouteFamily": "pi-browser"
+    },
+    {
+      "id": "B-02",
+      "task": "Inspect a landing page and summarize its visible layout.",
+      "requirements": [
+        "browser",
+        "public_site_research"
+      ],
+      "expectedRouteFamily": "pi-browser"
+    },
+    {
+      "id": "B-03",
+      "task": "Read the title of a public page and capture evidence.",
+      "requirements": [
+        "browser",
+        "screenshot"
+      ],
+      "expectedRouteFamily": "pi-browser"
+    },
+    {
+      "id": "B-04",
+      "task": "Use a browser to verify invalid email form feedback on a demo site.",
+      "requirements": [
+        "browser",
+        "screenshot"
+      ],
+      "requiredCapabilities": [
+        "browser.form_interaction"
+      ],
+      "expectedRouteFamily": "none"
+    },
+    {
+      "id": "C-01",
+      "task": "Generate a cheap landing page illustration.",
+      "requirements": [
+        "text_to_image",
+        "image"
+      ],
+      "expectedRouteFamily": "fal-creative"
+    },
+    {
+      "id": "C-02",
+      "task": "Create a detailed marketing image at a requested aspect ratio.",
+      "requirements": [
+        "text_to_image",
+        "image"
+      ],
+      "expectedRouteFamily": "fal-creative"
+    },
+    {
+      "id": "C-03",
+      "task": "Produce a minimalist white-background hero graphic.",
+      "requirements": [
+        "text_to_image",
+        "image"
+      ],
+      "expectedRouteFamily": "fal-creative"
+    },
+    {
+      "id": "C-04",
+      "task": "Generate a draft illustration with a hard spending limit.",
+      "requirements": [
+        "text_to_image",
+        "image"
+      ],
+      "expectedRouteFamily": "fal-creative"
+    },
+    {
+      "id": "N-01",
+      "task": "Refactor a TypeScript function and run its tests.",
+      "requirements": [
+        "coding"
+      ],
+      "expectedRouteFamily": "native"
+    },
+    {
+      "id": "N-02",
+      "task": "Update repository README text.",
+      "requirements": [
+        "coding"
+      ],
+      "expectedRouteFamily": "native"
+    },
+    {
+      "id": "X-01",
+      "task": "Transfer money through my private bank account.",
+      "requirements": [
+        "private_account_action"
+      ],
+      "expectedRouteFamily": "none"
+    },
+    {
+      "id": "X-02",
+      "task": "Generate a video when all video routes are disabled.",
+      "requirements": [
+        "text_to_video"
+      ],
+      "expectedRouteFamily": "none"
+    }
+  ]
+}

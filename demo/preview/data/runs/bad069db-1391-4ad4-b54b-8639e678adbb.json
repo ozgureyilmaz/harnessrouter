@@ -1,0 +1,13 @@
+{
+  "runId": "bad069db-1391-4ad4-b54b-8639e678adbb",
+  "kind": "direct-comparison.json",
+  "status": "completed",
+  "selectedRouteId": "direct-provider",
+  "timing": {
+    "totalMs": 10279.416208999999
+  },
+  "cost": {
+    "status": "estimated",
+    "usd": 0.012
+  }
+}
