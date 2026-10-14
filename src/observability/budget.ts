@@ -3,23 +3,29 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {Budget,Cost} from '../domain/types.js';
 import {RouterError} from '../domain/errors.js';
-interface Entry {id:string;runId:string;usd:number;label:string;state:'reserved'|'settled';cost?:Cost}
+interface Entry {id:string;runId:string;usd:number;label:string;state:'reserved'|'settled';cost?:Cost;scopeId?:string;scopeCapUsd?:number}
+export interface BudgetScope {id:string;capUsd:number}
 export class BudgetLedger {
   private entries:Entry[]=[];
   private lockPath:string;
-  private constructor(private root:string,readonly capUsd:number) {this.lockPath=join(root,'budget.lock');}
-  static async open(root:string,capUsd:number) {
-    await mkdir(root,{recursive:true,mode:0o700});const ledger=new BudgetLedger(root,capUsd);
+  private constructor(private root:string,readonly capUsd:number,readonly scope?:BudgetScope) {this.lockPath=join(root,'budget.lock');}
+  static async open(root:string,capUsd:number,scope?:BudgetScope) {
+    if(!Number.isFinite(capUsd)||capUsd<0||scope&&(!scope.id||!Number.isFinite(scope.capUsd)||scope.capUsd<0))throw new RouterError('budget_invalid','Budget caps must be finite nonnegative values');
+    await mkdir(root,{recursive:true,mode:0o700});const ledger=new BudgetLedger(root,capUsd,scope);
     await ledger.reload();return ledger;
   }
   private async reload() {
     const ledger=this;const root=this.root;
     try {ledger.entries=JSON.parse(await readFile(join(root,'budget.json'),'utf8')).entries;}
     catch (e) {if ((e as NodeJS.ErrnoException).code!=='ENOENT')throw new RouterError('budget_corrupt','Budget ledger cannot be read; refusing to reset spending history');}
-    if (!Array.isArray(ledger.entries)||ledger.entries.some(e=>!Number.isFinite(e.usd)||e.usd<0)) throw new RouterError('budget_corrupt','Invalid budget entries');
+    if (!Array.isArray(ledger.entries)||ledger.entries.some(e=>!Number.isFinite(e.usd)||e.usd<0||e.scopeId!==undefined&&(typeof e.scopeId!=='string'||!Number.isFinite(e.scopeCapUsd)||e.scopeCapUsd!<0))) throw new RouterError('budget_corrupt','Invalid budget entries');
+    if(ledger.scope&&ledger.entries.some(e=>e.scopeId===ledger.scope!.id&&e.scopeCapUsd!==ledger.scope!.capUsd))throw new RouterError('budget_invalid','An existing evaluation scope cannot change its authorized cap');
   }
   get committedUsd() {return this.entries.reduce((n,e)=>n+e.usd,0);}
-  get remainingUsd() {return Math.max(0,this.capUsd-this.committedUsd);}
+  get scopeCommittedUsd() {return this.scope?this.entries.filter(e=>e.scopeId===this.scope!.id).reduce((n,e)=>n+e.usd,0):this.committedUsd;}
+  get remainingUsd() {return Math.max(0,Math.min(this.capUsd-this.committedUsd,this.scope?this.scope.capUsd-this.scopeCommittedUsd:Number.POSITIVE_INFINITY));}
+  unresolvedForRun(runId:string) {return this.entries.some(e=>e.runId===runId&&(e.state==='reserved'||!e.cost||e.cost.status==='unknown'));}
+  async refresh(){await this.chain;await this.reload();}
   costForRun(runId:string):Cost {
     const entries=this.entries.filter(e=>e.runId===runId);
     if(!entries.length)return {status:'not_applicable',usd:0,details:'No provider spending was reserved'};
@@ -50,7 +56,7 @@ export class BudgetLedger {
       async reserve(usd,label){
         return ledger.transaction(async()=>{
           if (!Number.isFinite(usd)||usd<0||usd>this.remainingUsd+1e-10) throw new RouterError('budget_exceeded',`Insufficient authorized budget for ${label}`);
-          const id=randomUUID();ledger.entries.push({id,runId,usd,label,state:'reserved'});await ledger.persist();return id;
+          const id=randomUUID();ledger.entries.push({id,runId,usd,label,state:'reserved',...(ledger.scope?{scopeId:ledger.scope.id,scopeCapUsd:ledger.scope.capUsd}:{})});await ledger.persist();return id;
         });
       },
       async settle(id,cost){return ledger.transaction(async()=>{const entry=ledger.entries.find(e=>e.id===id&&e.runId===runId);if(!entry)throw new RouterError('budget_invalid','Unknown reservation');

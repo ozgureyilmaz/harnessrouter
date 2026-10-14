@@ -9,6 +9,7 @@ This is the intended source-review boundary. It does not stage or commit files.
 - `config/harness-registry.yaml`, `config/harness-registry.example.yaml`, and `config/.env.example`
 - `docs/ARCHITECTURE.md`, `docs/CURRENT_STATUS_REVIEW.md`, `docs/DELIVERY_ALLOWLIST.md`, `docs/DEMO_AND_PITCH.md`, `docs/EXPERIMENTS_AND_METRICS.md`, `docs/FAL_PROFILES.md`, `docs/PRODUCT_SPEC.md`, `docs/RUNBOOK.md`, `docs/SECURITY_AND_COST.md`, `docs/SOURCES_AND_ASSUMPTIONS.md`, and `docs/VALIDATION_GATES.md`
 - `demo/README.md`, `demo/run-log.md`, `demo/browser-task.json`, `demo/image-task.json`, `demo/offline-evaluation.json`, `demo/live-routing-evaluation.json`, `demo/native-mcp-verification.json`, and `demo/provenance-audit.json`
+- `docs/LIVE_EVALUATION.md` and `docs/LIVE_EVALUATION_RESULTS.md` — evaluation commands and portable aggregate results; raw run files remain local.
 - `docs/DELIVERY_REVIEW.json` — exact candidate file manifest and scan results; review only, never automatic staging
 - `.github/workflows/pages.yml`, `docs/LOCAL_METERING.md`, and `demo/preview/**` — portable Pages source, sanitized snapshots, and explicitly reviewed original demo images
 - `demo/creative-pilot-20261012.md`, `demo/paired-comparison-plan.md`, `demo/codex-only-run.json`, `demo/browser-comparison.md`, and `demo/browser-comparison.json` — bounded experiment summaries and portable task/evidence records

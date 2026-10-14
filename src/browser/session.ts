@@ -2,6 +2,7 @@ import type { Browser, BrowserContext, Page } from 'playwright';
 import { chromium } from 'playwright';
 import { createAllowlistProxy, type AllowlistProxy } from './allowlist-proxy.js';
 import { assertAllowedUrl, normalizeAllowedDomains } from './policy.js';
+import { evaluationFixtureResponse, parseEvaluationFixture, type EvaluationFixture } from './eval-fixture.js';
 
 const BROWSER_ARGS = [
   '--disable-background-networking',
@@ -17,6 +18,7 @@ export interface BrowserSessionOptions {
   allowedDomains: readonly string[];
   chromeChannel?: string;
   operationTimeoutMs?: number;
+  evaluationFixture?: EvaluationFixture;
 }
 
 export interface PageObservation {
@@ -41,6 +43,7 @@ export interface PageObservation {
 
 export class BrowserSession {
   readonly allowedDomains: string[];
+  readonly evaluationFixture?: EvaluationFixture;
   private readonly chromeChannel: string;
   private readonly operationTimeoutMs: number;
   private proxy?: AllowlistProxy;
@@ -48,9 +51,16 @@ export class BrowserSession {
   private context?: BrowserContext;
   private currentPage?: Page;
   private closed = false;
+  private evaluationFixtureServed = false;
 
   constructor(options: BrowserSessionOptions) {
     this.allowedDomains = normalizeAllowedDomains(options.allowedDomains);
+    this.evaluationFixture = options.evaluationFixture
+      ? parseEvaluationFixture(options.evaluationFixture)
+      : undefined;
+    if (this.evaluationFixture && !this.allowedDomains.includes('example.com')) {
+      throw new Error('Evaluation fixtures require example.com in the exact browser allowlist.');
+    }
     this.chromeChannel = options.chromeChannel ?? 'chrome';
     this.operationTimeoutMs = options.operationTimeoutMs ?? 10_000;
   }
@@ -83,6 +93,22 @@ export class BrowserSession {
         serviceWorkers: 'block',
       });
       await this.context.route('**/*', async (route) => {
+        if (this.evaluationFixture) {
+          const request = route.request();
+          const response = evaluationFixtureResponse(this.evaluationFixture, {
+            url: request.url(),
+            resourceType: request.resourceType(),
+            isNavigationRequest: request.isNavigationRequest(),
+            isMainFrame: request.isNavigationRequest() && request.frame() === this.currentPage?.mainFrame(),
+          }, this.evaluationFixtureServed);
+          if (!response) {
+            await route.abort('blockedbyclient').catch(() => undefined);
+            return;
+          }
+          this.evaluationFixtureServed = true;
+          await route.fulfill(response);
+          return;
+        }
         try {
           assertAllowedUrl(route.request().url(), this.allowedDomains);
           await route.continue();
@@ -110,6 +136,9 @@ export class BrowserSession {
   async navigate(rawUrl: string, signal?: AbortSignal): Promise<string> {
     signal?.throwIfAborted();
     const url = assertAllowedUrl(rawUrl, this.allowedDomains);
+    if (this.evaluationFixture && rawUrl !== this.evaluationFixture.url) {
+      throw new Error('Evaluation browser sessions may open only their exact host-owned fixture URL.');
+    }
     await this.start();
     signal?.throwIfAborted();
     const page = this.requirePage();
@@ -180,6 +209,57 @@ export class BrowserSession {
           width: Math.round(mainBox.width),
           height: Math.round(mainBox.height),
         } : null },
+      },
+    };
+  }
+
+  /** Independent page oracle used to freeze reference evidence before agent trials. */
+  async captureOracleReference(screenshotPath: string, signal?: AbortSignal): Promise<PageObservation> {
+    signal?.throwIfAborted();
+    const page = this.requirePage();
+    const url = page.url();
+    assertAllowedUrl(url, this.allowedDomains);
+    if (this.evaluationFixture && url !== this.evaluationFixture.url) {
+      throw new Error('Evaluation reference page does not match its host-owned fixture URL.');
+    }
+
+    const title = await page.title();
+    const data = await page.locator('body').evaluate((body) => {
+      const bodyElement = body instanceof HTMLElement ? body : document.body;
+      const visibleText = bodyElement.innerText;
+      const bodyStyle = getComputedStyle(bodyElement);
+      const rootStyle = getComputedStyle(document.documentElement);
+      const heading = document.querySelector('h1');
+      const firstLink = document.querySelector('a');
+      const headingStyle = heading ? getComputedStyle(heading) : undefined;
+      const linkStyle = firstLink ? getComputedStyle(firstLink) : undefined;
+      const bodyBackground = bodyStyle.backgroundColor;
+      return {
+        visibleText: visibleText.slice(0, 12_000),
+        textTruncated: visibleText.length > 12_000,
+        palette: {
+          pageBackground: bodyBackground && bodyBackground !== 'rgba(0, 0, 0, 0)' ? bodyBackground : rootStyle.backgroundColor,
+          bodyText: bodyStyle.color || 'unknown',
+          heading: headingStyle?.color ?? null,
+          link: linkStyle?.color ?? null,
+        },
+        typography: {
+          bodyFontFamily: bodyStyle.fontFamily.slice(0, 200), bodyFontSize: bodyStyle.fontSize,
+          bodyLineHeight: bodyStyle.lineHeight, headingFontFamily: headingStyle?.fontFamily.slice(0, 200) ?? null,
+          headingFontSize: headingStyle?.fontSize ?? null, headingFontWeight: headingStyle?.fontWeight ?? null,
+        },
+      };
+    }, undefined, {timeout: this.operationTimeoutMs, signal});
+    const main = page.locator('main').first();
+    const mainBox = await (await main.count() ? main : page.locator('body')).boundingBox();
+    const viewport = page.viewportSize() ?? {width: 1280, height: 720};
+    await page.screenshot({path: screenshotPath, fullPage: false, animations: 'disabled', timeout: this.operationTimeoutMs, signal, type: 'png'});
+    signal?.throwIfAborted();
+    return {
+      url, title: title.slice(0, 500), text: data.visibleText, textTruncated: data.textTruncated,
+      visualStyle: {
+        viewport, palette: data.palette, typography: data.typography,
+        layout: {mainContentBox: mainBox ? {x: Math.round(mainBox.x), y: Math.round(mainBox.y), width: Math.round(mainBox.width), height: Math.round(mainBox.height)} : null},
       },
     };
   }

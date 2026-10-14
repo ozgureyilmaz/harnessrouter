@@ -47,12 +47,9 @@ const evalCase = z.object({
   }
 });
 
-export const evaluationSetSchema=z.object({schemaVersion:z.literal('1.0'),cases:z.array(evalCase).length(24)}).strict().superRefine((set,ctx)=>{
+export const evaluationSetSchema=z.object({schemaVersion:z.literal('1.0'),cases:z.array(evalCase).min(1)}).strict().superRefine((set,ctx)=>{
   const ids=new Set<string>();
   for(const item of set.cases){if(ids.has(item.id))ctx.addIssue({code:'custom',message:`Duplicate evaluation case id: ${item.id}`});ids.add(item.id);}
-  const counts={browser:0,image:0,host_defer:0,unsupported:0,composed:0};
-  for(const item of set.cases)counts[item.category]++;
-  if(Object.values(counts).some(count=>count===0))ctx.addIssue({code:'custom',message:'Evaluation set must cover all five case categories'});
 });
 export type EvaluationSet=z.infer<typeof evaluationSetSchema>;
 export type EvaluationCase=EvaluationSet['cases'][number];

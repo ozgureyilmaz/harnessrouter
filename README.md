@@ -2,7 +2,7 @@
 
 task-aware execution across independent agent harnesses through MCP.
 
-harnessrouter lets a Codex session delegate tasks to independently controlled harnesses and receive inspectable results. The host keeps the task context and owns the final answer. Each harness owns its tools, model configuration, execution lifecycle, and artifacts.
+harnessrouter lets a host session delegate tasks to independently controlled harnesses and receive inspectable results. The host keeps the task context and owns the final answer. Each harness owns its tools, model configuration, execution lifecycle, and artifacts.
 
 ## why harnessrouter
 
@@ -11,7 +11,7 @@ Coding agents handle implementation, debugging, testing, research, automation, a
 The goal is to connect those environments while keeping one continuous host session. New harnesses can join through a shared interface, with explicit permissions, budgets, and result verification across handoffs.
 
 ```text
-task / current Codex session
+task / current host session
              ↓
 local MCP gateway
              ↓
@@ -21,7 +21,7 @@ select an eligible harness + model route
              ↓
 independent execution → verification → artifacts + traces
              ↓
-return to the same Codex session
+return to the same host session
 ```
 
 Cross-harness interoperability is the primary claim. Improvements in task success, speed, cost, or output quality remain hypotheses to test.
@@ -33,7 +33,7 @@ The local MVP has two independent execution paths:
 - **Pi:** a real RPC agent with restricted, isolated Chrome tools for public-page inspection and screenshots.
 - **fal-creative:** model-specific planning, budget admission, durable submission tracking, queue execution, bounded recovery, and decoded image verification.
 - **Composition:** the host passes one run's observations into another task, preserving its parent ID and context fingerprint.
-- **Host defer:** returns control to Codex for host-owned work; the MCP runtime never silently starts another Codex.
+- **Host defer:** returns control to the host for host-owned work.
 
 These are the current adapters. The routing design is broader than browser and image tasks; additional execution capabilities require implemented, authorized adapters.
 
@@ -45,13 +45,13 @@ Recent additions include schema 1.2 usage/cost components, evidence-backed accep
 
 The static demo replays captured runs and displays original artifacts. It makes no provider calls. The featured native MCP workflow returned a verified screenshot and image with matching parent/context provenance. Unsupported or subjective criteria remain `unverified`; technical completion does not establish artistic quality.
 
-A separate browser-only pilot recorded **4/4 task checks for native Codex and 3/4 for Pi**: Pi omitted the exact link target. Timing boundaries differ, so these values do not establish a speed advantage. A separate native Codex-only browser-to-image run is **partial**: it generated a real draft, but fresh-browser inspection and rendered style measurement were unavailable in that run, and the exact 16:9 check failed. Its longer elapsed time includes orchestration and interruption, so it cannot be compared directly with router processing time.
+A separate browser-only pilot recorded **4/4 task checks for the native host and 3/4 for Pi**: Pi omitted the exact link target. Timing boundaries differ, so these values do not establish a speed advantage. A separate host-only browser-to-image run is **partial**: it generated a real draft, but fresh-browser inspection and rendered style measurement were unavailable in that run, and the exact 16:9 check failed. Its longer elapsed time includes orchestration and interruption, so it cannot be compared directly with router processing time.
 
 The [three-pair creative pilot](demo/creative-pilot-20261012.md) produced technically valid images in both arms, with varying speed and equal generation-price estimates. Total host/Pi USD cost is unknown; no efficiency or quality advantage has been established.
 
 ## setup
 
-Requires Node.js **22.19+**, npm, and Codex. Browser execution also needs Chrome and a configured Pi provider. Image execution needs fal credentials.
+Requires Node.js **22.19+**, npm, and an MCP client. Browser execution also needs Chrome and a configured Pi provider. Image execution needs fal credentials.
 
 ```bash
 npm ci
@@ -64,13 +64,12 @@ Edit `.env` locally. Set `OPENAI_API_KEY` for Decisions and `FAL_KEY` for image 
 
 For explicitly authorized live work, set `ROUTER_ALLOW_PAID_RUNS=true`, `ROUTER_DRY_RUN=false`, and finite task/session budgets. Router budgets cover priced reservations; they do not price or cap unknown host/Pi subscription usage. Keep keys out of Git and MCP arguments.
 
-## connect to Codex
+## connect through MCP
 
-From the repository root after building:
+After building, configure your MCP client to start the stdio server with:
 
 ```bash
-codex mcp add harnessrouter -- node "$(pwd)/dist/index.js"
-codex mcp get harnessrouter
+node /absolute/path/to/harnessrouter/dist/index.js
 ```
 
 The server exposes `route_task`, `list_harnesses`, `get_run`, and `cancel_run`. Configure a 300-second tool timeout for long tasks. Reload the MCP connection after rebuilding.
@@ -91,9 +90,11 @@ npm run demo:check
 
 Default tests and the offline evaluator use provider doubles and local fixtures. Live integration tests are opt-in; skipped live tests are not live verification. Offline eligibility checks do not measure execution success.
 
-After supplying credentials and authorizing spend, `npm run smoke:live -- composite` exercises a fresh browser-to-image workflow. It uses the router directly; native Codex MCP visibility is checked separately.
+After supplying credentials and authorizing spend, `npm run smoke:live -- composite` exercises a fresh browser-to-image workflow. It uses the router directly; native host MCP visibility is checked separately.
 
 ## local evaluations and metering
+
+The richer performance pilot runs 42 trials across Pi browser, both fal profiles and two composed workflows, with controlled/public browser references and GPT-6 Luna/high semantic grading. `npm run eval:pilot` checks its contracts without provider calls; `npm run eval:pilot -- --mode live --max-cost-usd 4` runs the explicitly authorized live suite. Saved-output regrading, budgets, evidence and limits are documented in [LIVE_EVALUATION.md](docs/LIVE_EVALUATION.md). The [recorded results](docs/LIVE_EVALUATION_RESULTS.md) summarize the completed pilot and its limitations.
 
 The evaluator supports explicit direct/router paths and per-run caps. Benchmark tools record per-task usage, timing, linked runs, and graded outcomes under ignored `artifacts/benchmark/`.
 
@@ -101,7 +102,7 @@ The evaluator supports explicit direct/router paths and per-run caps. Benchmark 
 npm run benchmark -- report
 ```
 
-Capturing a new benchmark can launch real Codex/provider work and requires separate authorization. Missing counters stay unavailable, subscription USD stays unknown, and rate estimates stay distinct from invoices. See [local metering](docs/LOCAL_METERING.md) and [experiment definitions](docs/EXPERIMENTS_AND_METRICS.md).
+Capturing a new benchmark can launch real agent/provider work and requires separate authorization. Missing counters stay unavailable, subscription USD stays unknown, and rate estimates stay distinct from invoices. See [local metering](docs/LOCAL_METERING.md) and [experiment definitions](docs/EXPERIMENTS_AND_METRICS.md).
 
 ## GitHub Pages
 

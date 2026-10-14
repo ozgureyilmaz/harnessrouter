@@ -20,7 +20,8 @@
     "baseline": "tsx scripts/baseline.ts",
     "eval:live": "tsx scripts/eval.ts",
     "eval:harnesses": "tsx scripts/evaluate-harnesses.ts",
-    "benchmark": "tsx scripts/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "eval:pilot": "tsx scripts/evaluate-pilot.ts"
   },
   "keywords": [],
   "author": "",
@@ -42,8 +43,17 @@
     "yaml": "2.9.1",
     "zod": "4.6.6"
   },
+  "overrides": {
+    "deepeval": {
+      "@opentelemetry/exporter-trace-otlp-proto": {
+        "protobufjs": "8.8.1"
+      }
+    }
+  },
   "devDependencies": {
+    "@sentry/node": "11.7.0",
     "@types/node": "26.6.5",
+    "deepeval": "0.9.22",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
   }

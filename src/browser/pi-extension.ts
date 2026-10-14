@@ -4,6 +4,7 @@ import { Type } from 'typebox';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { BrowserSession } from './session.js';
 import { assertAllowedUrl, normalizeAllowedDomains, BrowserPolicyError } from './policy.js';
+import { parseEvaluationFixture, type EvaluationFixture } from './eval-fixture.js';
 
 const MAX_TOOL_CALLS = 8;
 const MAX_SCREENSHOTS = 1;
@@ -14,11 +15,13 @@ function readPolicyFromEnvironment(): {
   artifactsDir: string;
   runId: string;
   initialUrl: string;
+  evaluationFixture?: EvaluationFixture;
 } {
   const rawDomains = process.env.HARNESSROUTER_ALLOWED_DOMAINS;
   const artifactsDir = process.env.HARNESSROUTER_ARTIFACTS_DIR;
   const runId = process.env.HARNESSROUTER_RUN_ID;
   const initialUrl = process.env.HARNESSROUTER_INITIAL_URL;
+  const rawFixture = process.env.HARNESSROUTER_EVAL_FIXTURE_JSON;
   if (!rawDomains || !artifactsDir || !runId || !initialUrl || !isAbsolute(artifactsDir)) {
     throw new Error('The browser extension requires task-scoped runtime configuration.');
   }
@@ -36,7 +39,18 @@ function readPolicyFromEnvironment(): {
   }
   const allowedDomains = normalizeAllowedDomains(parsed as string[]);
   assertAllowedUrl(initialUrl, allowedDomains);
-  return { allowedDomains, artifactsDir: resolve(artifactsDir), runId, initialUrl };
+  let evaluationFixture: EvaluationFixture | undefined;
+  if (rawFixture !== undefined) {
+    try {
+      evaluationFixture = parseEvaluationFixture(JSON.parse(rawFixture));
+    } catch {
+      throw new Error('The host-provided evaluation fixture is invalid.');
+    }
+    if (initialUrl !== evaluationFixture.url || !allowedDomains.includes('example.com')) {
+      throw new Error('The host-provided evaluation fixture does not match the task-scoped browser policy.');
+    }
+  }
+  return { allowedDomains, artifactsDir: resolve(artifactsDir), runId, initialUrl, evaluationFixture };
 }
 
 function errorText(error: unknown): string {
@@ -54,7 +68,7 @@ export default function piBrowserExtension(pi: ExtensionAPI): void {
   let openedInitialUrl = false;
 
   const getBrowser = (): BrowserSession => {
-    if (!browser) browser = new BrowserSession({ allowedDomains: policy.allowedDomains });
+    if (!browser) browser = new BrowserSession({ allowedDomains: policy.allowedDomains, evaluationFixture: policy.evaluationFixture });
     return browser;
   };
 

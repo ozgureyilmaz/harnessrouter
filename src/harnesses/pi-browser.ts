@@ -8,12 +8,15 @@ import { PROJECT_ROOT } from '../config.js';
 import { verifyImage } from '../observability/artifacts.js';
 import { PiRpcClient, PiRpcError, type PiRpcRecord } from '../transport/pi-rpc.js';
 import { intersectAllowedDomains, validatePublicUrl, BrowserPolicyError } from '../browser/policy.js';
+import { parseEvaluationFixture, type EvaluationFixture } from '../browser/eval-fixture.js';
 import {normalizePiUsage} from '../observability/metering.js';
 
 export interface PiBrowserHarnessOptions {
   allowedDomains?: string[];
   piBin?: string;
   chromeChannel?: string;
+  /** Host-owned opt-in fixture; never read from HarnessTask fields. */
+  evaluationFixture?: EvaluationFixture;
 }
 
 interface PiModelIdentity {
@@ -196,11 +199,13 @@ export class PiBrowserHarness implements HarnessAdapter {
   readonly id = 'pi-browser';
   private readonly piBin: string;
   private readonly chromeChannel: string;
+  private readonly evaluationFixture?: EvaluationFixture;
   private healthInFlight?: Promise<Health>;
 
   constructor(private readonly options: PiBrowserHarnessOptions = {}) {
     this.piBin = resolve(options.piBin ?? join(PROJECT_ROOT, 'node_modules', '.bin', 'pi'));
     this.chromeChannel = options.chromeChannel ?? 'chrome';
+    this.evaluationFixture = options.evaluationFixture ? parseEvaluationFixture(options.evaluationFixture) : undefined;
   }
 
   async health(): Promise<Health> {
@@ -233,7 +238,14 @@ export class PiBrowserHarness implements HarnessAdapter {
       }
       const requestedDomains = task.allowedDomains?.length ? task.allowedDomains : [initialHostname];
       const domains = intersectAllowedDomains(requestedDomains, this.options.allowedDomains);
-      const taskUrl = await validatePublicUrl(rawUrl, domains);
+      const taskUrl = this.evaluationFixture
+        ? (() => {
+          if (rawUrl !== this.evaluationFixture!.url || !domains.includes('example.com')) {
+            throw new BrowserPolicyError('The host-owned evaluation fixture does not match this task URL and allowlist.');
+          }
+          return new URL(rawUrl);
+        })()
+        : await validatePublicUrl(rawUrl, domains);
 
       const health = await this.health();
       runtimeHealth=health;
@@ -253,6 +265,7 @@ export class PiBrowserHarness implements HarnessAdapter {
         HARNESSROUTER_ARTIFACTS_DIR: artifactsDir,
         HARNESSROUTER_INITIAL_URL: taskUrl.href,
         HARNESSROUTER_RUN_ID: ctx.runId,
+        ...(this.evaluationFixture ? {HARNESSROUTER_EVAL_FIXTURE_JSON: JSON.stringify(this.evaluationFixture)} : {}),
       });
       const args = [
         '--mode', 'rpc', '--no-session', '--no-builtin-tools', '--no-mcp',
