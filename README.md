@@ -1,8 +1,8 @@
 # harnessrouter
 
-🧭 *one agent. many harnesses. one reviewable result.*
+*one agent. many harnesses.*
 
-local mcp router. your current agent hands a bounded task to codex, claude code, opencode, or pi, and gets text or a patch back.
+local harnessrouter. your current agent hands a bounded task to codex, claude code, opencode, pi, and more. a decision model picks the best harness for each task, runs it on an isolated git snapshot, and gives you back text or a patch to review.
 
 [![CI](https://github.com/ozgureyilmaz/harnessrouter/workflows/Offline%20checks/badge.svg)](https://github.com/ozgureyilmaz/harnessrouter/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -12,7 +12,7 @@ local mcp router. your current agent hands a bounded task to codex, claude code,
 
 cross-harness workers: codex, claude code, opencode, and pi stay independent. mcp is the gateway.
 
-route choice: pin a worker, use local priority, or let a decision provider pick among routes that are already eligible.
+route choice: a decision model picks the harness. local priority is the keyless default. pin a worker, or enable a hosted provider with `--selector decisions`.
 
 isolated work: the worker gets a git snapshot. edits return as a patch. your repository is not changed for you.
 
@@ -21,63 +21,34 @@ inspectable runs: `list_harnesses`, `route_task`, `get_run`, and `cancel_run`.
 ## how it works
 
 ```mermaid
-flowchart TD
-    Host[Host agent] --> MCP[harnessrouter MCP server]
-    MCP --> Filter[Eligible routes]
-    Filter --> Pick{How is the route chosen?}
-    Pick -->|"preferredRouteId or one route"| Direct[Use that route]
-    Pick -->|local priority| Rank[Highest configured priority]
-    Pick -->|decisions| Provider[Decision provider]
-    Provider --> Offered{Id was eligible?}
-    Offered -->|no| Closed[Fail closed]
-    Direct --> Kind{Worker or host?}
-    Rank --> Unique{Unique top priority?}
-    Unique -->|no| Defer[Defer to the host]
-    Unique -->|yes| Kind
-    Offered -->|yes| Kind
-    Kind -->|host| Defer
-    Kind -->|"codex, claude code, opencode, or pi"| Adapter[Worker adapter]
-    Adapter --> Snap[Isolated Git snapshot]
-    Snap --> Result[Text or patch]
-    Result --> Host
-    Defer --> Host
+flowchart LR
+    A[Your task] --> B[harnessrouter]
+    B --> C{Decision model}
+    C -->|picks the best fit| D[Route to harness]
+    D --> E1[Codex]
+    D --> E2[Claude Code]
+    D --> E3[OpenCode]
+    D --> E4[Pi]
+    E1 & E2 & E3 & E4 --> F[Result: answer or patch]
+    F --> A
 ```
 
-the decision provider chooses a route id. it does not choose the worker model. openai decisions uses `gpt-6-luna`. typesafe jev and local ollaya are the other providers. a bad id, or a provider error, stops the run instead of switching providers. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
+the decision model step is whichever selector is configured, local priority rules by default or the hosted decision model when enabled with `--selector decisions`.
+
+a decision model chooses the harness for the task. the keyless default from `init` is local priority rules acting as that decision model: no provider call and no api key. equal top priorities defer to the host. `--selector decisions` or `--decision-provider` enables the hosted decision model. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. the provider returns a route id and does not choose the worker model. a bad id, or a provider error, stops the run instead of switching providers. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
 
 ```mermaid
 sequenceDiagram
-    actor User
-    participant Host as Host agent
-    participant MCP as harnessrouter MCP
-    participant Selector as Selector
-    participant Worker as Worker adapter
-
-    User->>Host: Bounded task
-    Host->>MCP: list_harnesses
-    MCP-->>Host: Routes, health, and policy
-    Host->>MCP: route_task
-    MCP->>MCP: Validate the task and keep eligible routes
-    alt preferredRouteId, one route, or local priority
-        MCP->>Selector: Select without a provider call
-    else decisions selector and several routes
-        MCP->>Selector: Choose among eligible route ids
-        Selector-->>MCP: Route id
-        MCP->>MCP: Accept the id only if it was offered
-    end
-    MCP->>Worker: Run Codex, Claude Code, OpenCode, or Pi
-    Worker->>Worker: Prepare an isolated Git snapshot
-    Worker-->>MCP: Text or patch
-    MCP-->>Host: Result and runId
-    opt Saved run
-        Host->>MCP: get_run(runId)
-        MCP-->>Host: Result, decision, and status
-    end
-    opt Still running
-        Host->>MCP: cancel_run(runId)
-        MCP-->>Host: cancelled true, or false if it already finished
-    end
-    Host-->>User: Review the text or patch
+    participant U as You
+    participant R as harnessrouter
+    participant D as Decision model
+    participant H as Harness
+    U->>R: Send a task
+    R->>D: Which harness fits this task?
+    D-->>R: Use Claude Code
+    R->>H: Run the task on a safe copy of your repo
+    H-->>R: Answer or patch
+    R-->>U: Return the result
 ```
 
 the same `taskId` returns a finished run. if a call times out, use `get_run` before sending that task again.
@@ -142,9 +113,9 @@ harnessrouter doctor --config ./harnessrouter.config.json
 
 `doctor` checks node, git, and the worker cli. it does not call a model. worker logins stay in each harness. this file does not store them.
 
-`init` writes `selector: "local"`. routing uses configured priority and does not call a decision provider, so this path needs no api key. dry run stays on, execution stays off, and paid calls stay off until you change them. a worker can spend its own subscription or api account, and the usd amount may be unknown, so each task sets `allowUnknownCost` to true.
+`init` writes `selector: "local"`. local priority rules act as the decision model, so this path needs no api key and does not call a provider. dry run stays on, execution stays off, and paid calls stay off until you change them. a worker can spend its own subscription or api account, and the usd amount may be unknown, so each task sets `allowUnknownCost` to true.
 
-opt into a decision provider when you create the file:
+enable the hosted decision model when you create the file. openai is the default provider. jev and ollaya are the others:
 
 ```bash
 harnessrouter init --selector decisions --decision-provider openai --config ./harnessrouter.config.json
