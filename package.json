@@ -1,6 +1,10 @@
 {
   "name": "harnessrouter",
   "version": "1.0.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "description": "Local MCP router that hands a bounded task to Codex, Claude Code, OpenCode, or Pi and returns text or a patch.",
   "main": "dist/api.js",
   "scripts": {
@@ -87,6 +91,7 @@
     "config/.env.example",
     "docs/",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
