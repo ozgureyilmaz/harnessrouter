@@ -21,3 +21,13 @@ First npm release of the local MCP router. `package.json` is already at `1.0.0`.
 
 - Missing hosted credentials never switch providers. Paid selection and worker execution each require their own explicit grant.
 - JSON configuration rejects credential fields. Unknown routes and provider errors fail closed.
+- Starter configuration is fail-closed: workers disabled, no workspace grants, dry run on.
+- Development dependency overrides move DeepEval's OpenTelemetry trace exporters to 0.223.0 and `uuid` to 11.1.1. Production dependencies are unchanged.
+
+### Changed
+
+- Contributor docs drop the event notes, local checkpoint reviews, and the delivery manifest.
+
+### Existing checkout
+
+If saved runs or budget reservations live under an older checkout's `artifacts/` directory, keep using that directory with `ARTIFACTS_DIR` or trusted `artifactsDir`. The default state directory does not import those runs. Reconcile old reservations before authorizing new priced work.

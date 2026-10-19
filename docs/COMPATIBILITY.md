@@ -40,7 +40,7 @@ The host retains control of the final response. Same-kind worker execution is an
 
 Pi browser and fal image adapters have existing recorded specialist runs, including native MCP composition with verified screenshot/image artifacts. That evidence covers the particular versions, tasks, paths, and permissions recorded; it does not certify every new worker protocol, host, runtime, or model.
 
-Read the [current review](CURRENT_STATUS_REVIEW.md), [pilot results](LIVE_EVALUATION_RESULTS.md), and [release gates](OPEN_SOURCE_RELEASE.md) for evidence and unresolved limits. No controlled advantage in total cost, quality, or speed has been established.
+Read the [pilot results](LIVE_EVALUATION_RESULTS.md) and [release gates](OPEN_SOURCE_RELEASE.md) for evidence and unresolved limits. No controlled advantage in total cost, quality, or speed has been established.
 
 ## Opt-in worker proof
 

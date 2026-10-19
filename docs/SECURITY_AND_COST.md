@@ -33,7 +33,7 @@
 3. fal.ai image/video requests, dependent on model/parameters.
 4. Potential verification model and download/storage cost.
 
-Decisions pricing verified at preparation time: $0.10 / 1M input tokens for `/v1/decisions` `gpt-6-luna`, plus pricing caveats in official docs; price may change. fal model pricing varies; query chosen endpoint's model page. Event advertises $50 fal credits per participant after check-in, but *do not assume credit is already claimed*. ChatGPT Pro event access is not automatically OpenAI API credit.
+Decisions pricing checked against the official guide at preparation time: $0.10 / 1M input tokens for `/v1/decisions` `gpt-6-luna`, plus the caveats in that guide. The price can change. fal model pricing varies; use the chosen endpoint's model page. A ChatGPT subscription is not OpenAI API credit.
 
 ## Logging and sanitization
 

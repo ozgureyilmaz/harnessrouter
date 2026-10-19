@@ -1,6 +1,4 @@
-# Operator runbook — Mac + Codex
-
-This is the post-build runbook. Older bootstrap instructions below are retained only where still useful; harnessrouter already has a local MCP server and both runtimes.
+# Operator runbook
 
 ## Project location
 
@@ -67,6 +65,8 @@ The registered project server points at `dist/index.js`. A long-lived stdio proc
 - Image URL invalid: check response payload and content type, URL expiry, retry only within budget.
 - MCP invisible in Codex: check registered server, project trust, session reload/restart, server stderr. Confirm in Codex MCP list.
 
-## Source-of-truth for build
+## Sources
 
-Read official docs linked in `docs/SOURCES_AND_ASSUMPTIONS.md`. Avoid copying stale examples if locally installed versions differ.
+Protocol references live in [architecture](ARCHITECTURE.md#official-references) and [decision providers](DECISION_PROVIDERS.md). Prefer the current upstream page when an installed CLI differs from an example in this repository.
+
+`scripts/decisions-smoke.sh` sends one paid OpenAI Decisions request. It runs only when `OPENAI_API_KEY` is set and `APPROVE_PAID_DECISION_SMOKE=yes`. Offline CI does not call it. `npm run smoke:live` is the router-level live check and also needs an explicit approval.
