@@ -97,7 +97,7 @@ test('doctor validates configuration and platform without launching worker tasks
     const configPath = join(dir, 'config.json');
     await writeFile(configPath, JSON.stringify({selector: 'local', dryRun: true, allowExecution: false, workerProfiles: []}));
     const output = capture();
-    assert.equal(await runCli(['doctor', '--config', configPath], {...output.io, cwd: dir, env: {}}), 0);
+    assert.equal(await runCli(['doctor', '--config', configPath], {...output.io, cwd: dir, env: envForCli(dir)}), 0);
     assert.match(output.stdout, /OK Node\.js:/);
     assert.match(output.stdout, /OK Package: harnessrouter/);
     assert.match(output.stdout, /OK Git:/);
@@ -109,7 +109,7 @@ test('doctor shows active default decision provider, key presence only, and no n
   const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-doctor-decision-'));
   try {
     const output = capture();
-    assert.equal(await runCli(['doctor'], {...output.io, cwd: dir, env: {XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state'), OPENAI_API_KEY: 'key-value-must-not-appear'}}), 0);
+    assert.equal(await runCli(['doctor'], {...output.io, cwd: dir, env: {PATH: process.env.PATH ?? '/usr/bin:/bin', XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state'), OPENAI_API_KEY: 'key-value-must-not-appear'}}), 0);
     assert.match(output.stdout, /DISABLED Decision layer: selector=decisions; provider=openai; model=gpt-6-luna; OPENAI_API_KEY=present; no provider request made/);
     assert.equal(output.stdout.includes('key-value-must-not-appear'), false);
   } finally { await rm(dir, {recursive: true, force: true}); }
@@ -139,7 +139,7 @@ test('doctor reports configured Ollaya as configured while leaving live availabi
 });
 
 function envForCli(dir: string): NodeJS.ProcessEnv {
-  return {XDG_CONFIG_HOME: join(dir, 'user-config'), XDG_STATE_HOME: join(dir, 'state')};
+  return {PATH: process.env.PATH ?? '/usr/bin:/bin', XDG_CONFIG_HOME: join(dir, 'user-config'), XDG_STATE_HOME: join(dir, 'state')};
 }
 
 test('doctor exits unsuccessfully when an explicitly enabled worker lacks required CLI flags', async () => {
