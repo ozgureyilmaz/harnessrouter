@@ -1,12 +1,30 @@
 # Decision providers
 
-harnessrouter uses a decision provider to choose among routes that already passed local eligibility and authorization checks. The provider never creates a route or changes the worker model. The default selector is `decisions` with OpenAI Decisions, model `gpt-6-luna`; the application starts in dry-run mode with paid calls and worker execution disabled.
+harnessrouter can ask a decision provider to choose among routes that already passed local eligibility and authorization checks. The provider never creates a route or changes the worker model. It runs only when `selector` is `decisions`. A new `harnessrouter init` file sets `selector` to `local`, so the first run uses configured priority and does not need an API key. Dry run stays on, worker execution stays off, and paid calls stay off until you change them.
+
+## First-run and omitted selector
+
+`harnessrouter init` writes `"selector": "local"` and does not write decision-provider fields. Routing then uses configured worker priority, or an explicit `preferredRouteId`. Equal top priorities defer to the host instead of guessing. No decision provider is called.
+
+Opt in when you create the file:
+
+```bash
+harnessrouter init --selector decisions --decision-provider openai --config ./harnessrouter.config.json
+harnessrouter init --selector decisions --decision-provider jev --config ./harnessrouter.config.json
+harnessrouter init --selector decisions --decision-provider ollaya --config ./harnessrouter.local.json
+```
+
+`--decision-provider` without `--selector` also selects `decisions`. `--selector local` together with `--decision-provider` is an error. The provider names are `openai`, `jev`, and `ollaya`. When you opt in and omit the provider, the starter uses OpenAI.
+
+A configuration file that omits `selector`, and a process with no configuration file, still resolve to `decisions` with OpenAI (`gpt-6-luna`). That preserves files written before this change, and any file that relied on the implicit default. It stays fail-closed: hosted selection does not run without its key, paid authorization, and execution permission. To move such a file onto the keyless path, set `"selector": "local"` or `ROUTER_SELECTOR=local`. An explicit `"selector": "decisions"` already stored by an older `init` is unchanged.
+
+`ROUTER_SELECTOR` overrides the file. The decision-provider lines in `config/.env.example` stay commented until you uncomment them.
 
 ## Choose a provider
 
 | Provider | Decision model | Credential and endpoint |
 | --- | --- | --- |
-| OpenAI Decisions (default) | `gpt-6-luna` | `OPENAI_API_KEY`; OpenAI's dedicated Decisions API. The current API documentation lists `gpt-6-luna` as the supported Decisions model. |
+| OpenAI Decisions | `gpt-6-luna` | Default provider when `selector` is `decisions` and `decisionProvider` is omitted. `OPENAI_API_KEY`; OpenAI's dedicated Decisions API. The current API documentation lists `gpt-6-luna` as the supported Decisions model. |
 | TypeSafe JEV | `jev-latest` by default; model must use `jev-*` | `TYPESAFE_API_KEY`, or `JEV_API_KEY` as a compatibility alias. The alias and primary key must match if both are set. |
 | Ollaya System One (local) | `laya:typed-decisions` by default; choose a local model name explicitly | Defaults to `http://127.0.0.1:11435`. Override with `ROUTER_OLLAYA_BASE_URL` or `ollayaBaseUrl` using one of the supported loopback hosts: `localhost`, `127.0.0.1`, or `[::1]`. Remote URLs, other loopback IPs, paths, queries, fragments, and embedded credentials are rejected. `OLLAYA_API_KEY` is optional. |
 
@@ -14,14 +32,7 @@ OpenAI's Decisions API uses its own request schema and pinned model. TypeSafe ha
 
 ## Configure
 
-`harnessrouter init` writes OpenAI Decisions settings by default. Select another provider when creating a starter file:
-
-```bash
-harnessrouter init --decision-provider jev --config ./harnessrouter.config.json
-harnessrouter init --decision-provider ollaya --config ./harnessrouter.local.json
-```
-
-Provider choices and non-secret settings can also be set in the JSON configuration:
+Provider choices and non-secret settings can also be set in the JSON configuration after you opt in:
 
 ```json
 {
@@ -78,11 +89,11 @@ Set `OLLAYA_API_KEY` only if your local service requires it. `doctor` reports th
 
 OpenAI and hosted TypeSafe clients keep a positive finite `ROUTER_DECISION_RESERVE_USD` configured (USD 0.01 by default), including while `selector: "local"` is selected or the task cap is zero, because the router constructs the selected client at startup. No reservation is made unless a paid selection runs. The reserve must be no greater than `MAX_COST_USD_PER_TASK` only when hosted selection is enabled with a positive task cap. `decisionTimeoutMs` must be a positive integer no greater than `2,147,483,647`. Local Ollaya uses a zero paid reservation.
 
-To opt out of model-based selection, set `selector` to `local` in trusted JSON or `ROUTER_SELECTOR=local`. Local selection applies configured priority or an explicit `preferredRouteId`. There is no implicit provider fallback: a missing key, invalid response, or provider failure remains an explicit failure or host-defer result.
+`selector: "local"` applies configured priority or an explicit `preferredRouteId` and does not call a provider. Set it in trusted JSON or with `ROUTER_SELECTOR=local`. There is no implicit provider fallback: a missing key, invalid response, or provider failure remains an explicit failure or host-defer result. Switching a file from `local` to `decisions` does not grant paid calls or execution; those gates stay closed until you open them.
 
 ## Chat workflow
 
-Merge your provider settings into the [working worker configuration](../README.md#configure-a-worker). Enable profiles with explicit models supported by their installed runtimes and grant the project root. To exercise model-based selection for a review, configure at least two eligible review workers. A single eligible route or an explicit `preferredRouteId` skips inference; this avoids unnecessary selection latency and hosted charges.
+Merge your provider settings into the [worker configuration](../README.md#setup). Enable profiles with explicit models supported by their installed runtimes and grant the project root. To exercise model-based selection for a review, configure at least two eligible review workers. A single eligible route or an explicit `preferredRouteId` skips inference; this avoids unnecessary selection latency and hosted charges.
 
 Execution permission and workspace preflight come before selector payment admission. A sole worker or pinned image profile uses its full execution budget without a decision reservation. Underlying permissions still apply: native workers need their explicit unknown-cost grants, Pi always needs global execution and task unknown-cost grants, and image generation needs its own paid authorization. A paid choice among multiple routes must fit the selection reserve as well as execution costs before any request is sent.
 
@@ -111,4 +122,4 @@ Use a fresh task ID for different work. The router filters routes, preflights th
 
 ## Safety and doctor
 
-The starter configuration keeps `ROUTER_DRY_RUN=true`, `ROUTER_ALLOW_PAID_RUNS=false`, and `ROUTER_ALLOW_EXECUTION=false`. A configured provider is not contacted until the required live settings and task eligibility allow a decision. `doctor` displays the selected provider/model and credential presence; it makes no connectivity, authentication, or inference request. For Ollaya it reports the configured loopback URL while marking live availability unverified.
+The starter configuration keeps `dryRun` true, `allowPaid` false, and `allowExecution` false (`ROUTER_DRY_RUN`, `ROUTER_ALLOW_PAID_RUNS`, and `ROUTER_ALLOW_EXECUTION`). A fresh local starter makes `doctor` report the decision layer as disabled, because the provider configuration is unused. A configured provider is not contacted until `selector` is `decisions` and the required live settings and task eligibility allow a decision. `doctor` displays the selected provider/model and credential presence; it makes no connectivity, authentication, or inference request. For Ollaya it reports the configured loopback URL while marking live availability unverified.

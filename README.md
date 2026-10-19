@@ -142,7 +142,17 @@ harnessrouter doctor --config ./harnessrouter.config.json
 
 `doctor` checks node, git, and the worker cli. it does not call a model. worker logins stay in each harness. this file does not store them.
 
-`init` defaults to `selector: "decisions"`. the example above uses local priority so one worker can run without a decision call. a worker can spend its own subscription or api account, and the usd amount may be unknown, so each task sets `allowUnknownCost` to true.
+`init` writes `selector: "local"`. routing uses configured priority and does not call a decision provider, so this path needs no api key. dry run stays on, execution stays off, and paid calls stay off until you change them. a worker can spend its own subscription or api account, and the usd amount may be unknown, so each task sets `allowUnknownCost` to true.
+
+opt into a decision provider when you create the file:
+
+```bash
+harnessrouter init --selector decisions --decision-provider openai --config ./harnessrouter.config.json
+```
+
+providers are `openai`, `jev`, and `ollaya`. `--decision-provider` alone also selects `decisions`. `--selector local` together with `--decision-provider` is rejected. see [decision providers](docs/DECISION_PROVIDERS.md).
+
+a config file that leaves `selector` out, and a process with no config file, still use `decisions` with openai. that keeps older files on the same fail-closed path: hosted selection does not run without its key and the paid and execution gates. set `"selector": "local"` in the file, or `ROUTER_SELECTOR=local`, to switch them. an older init file that already says `"selector": "decisions"` is unchanged.
 
 config defaults to `~/.config/harnessrouter/config.json` (`$XDG_CONFIG_HOME` when set). run data defaults to `~/.local/state/harnessrouter`. process environment overrides the file. spend and snapshot limits: [security and cost](docs/SECURITY_AND_COST.md).
 
