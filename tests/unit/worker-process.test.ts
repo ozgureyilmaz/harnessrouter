@@ -140,24 +140,32 @@ test('worker leases serialize concurrent callers and can be reacquired only afte
     const losers = contenders.filter((item): item is PromiseRejectedResult => item.status === 'rejected');
     assert.equal(winners.length, 1);
     assert.equal(losers.length, 1);
-    assert.equal((losers[0]!.reason as {code?: string}).code, 'worker_reconciliation_required');
+    assert.equal((losers[0]!.reason as {code?: string}).code, 'worker_busy');
     await winners[0]!.value();
     const releaseAgain = await acquireWorkerLease(dir, 'same-profile', 'run-c');
     await releaseAgain();
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
-test('worker lease treats a stale record as reconciliation required and never overwrites it', async () => {
+test('worker lease reclaims a dead pid and leaves a live pid busy', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-stale-lease-'));
   try {
+    const {currentProcessIdentity} = await import('../../src/workers/lease.js');
     const profileId = 'stale-profile';
     const leaseDir = join(dir, 'worker-leases');
     await mkdir(leaseDir, {recursive: true, mode: 0o700});
     const path = join(leaseDir, `${createHash('sha256').update(profileId).digest('hex')}.json`);
-    const stale = JSON.stringify({profileId, runId: 'previous-run', pid: 987654321, token: 'stale-owner', startedAt: '2020-01-01T00:00:00.000Z'});
+    const stale = JSON.stringify({profileId, runId: 'previous-run', pid: 987654321, token: 'stale-owner', startedAt: '2020-01-01T00:00:00.000Z', hostname: currentProcessIdentity().hostname, processStartedAt: '2020-01-01T00:00:00.000Z'});
     await writeFile(path, stale, {mode: 0o600, flag: 'wx'});
-    await assert.rejects(acquireWorkerLease(dir, profileId, 'retry-run'), (error: {code?: string}) => error.code === 'worker_reconciliation_required');
-    assert.equal(await readFile(path, 'utf8'), stale);
+    const release = await acquireWorkerLease(dir, profileId, 'retry-run');
+    const reclaimed = JSON.parse(await readFile(path, 'utf8')) as {runId: string; pid: number};
+    assert.equal(reclaimed.runId, 'retry-run');
+    assert.equal(reclaimed.pid, process.pid);
+    await release();
+    const live = JSON.stringify({profileId, runId: 'live-run', pid: process.pid, token: 'live-owner', startedAt: new Date().toISOString(), ...currentProcessIdentity()});
+    await writeFile(path, live, {mode: 0o600, flag: 'wx'});
+    await assert.rejects(acquireWorkerLease(dir, profileId, 'other-run'), (error: {code?: string}) => error.code === 'worker_busy');
+    assert.equal(await readFile(path, 'utf8'), live);
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
