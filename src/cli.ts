@@ -9,7 +9,7 @@ import {runProcess} from './workers/process.js';
 import type {WorkerKind, WorkerProfile, WorkerProtocol} from './workers/types.js';
 
 const HOSTS: McpHost[] = ['codex', 'claude-code', 'opencode', 'pi'];
-const HELP = `harnessrouter [serve] [--config PATH]\n\nharnessrouter init [--scope user|local] [--selector local|decisions] [--decision-provider openai|jev|ollaya] [--config PATH]\nharnessrouter doctor [--config PATH]\nharnessrouter stats [--sort time|tokens] [--task-type TYPE] [--limit N] [--json] [--config PATH]\nharnessrouter mcp-config --host codex|claude-code|opencode|pi [--config PATH]\n\nserve is the default command. init writes a disabled starter with selector local, so routing needs no decision API key. Pass --selector decisions or --decision-provider to opt into a decision provider. mcp-config prints a snippet and never edits host configuration.\n`;
+const HELP = `harnessrouter [serve] [--config PATH]\n\nharnessrouter init [--scope user|local] [--selector local|decisions] [--decision-provider openai|jev|ollaya] [--config PATH]\nharnessrouter doctor [--config PATH]\nharnessrouter stats [--sort time|tokens] [--task-type TYPE] [--limit N] [--json] [--config PATH]\nharnessrouter reconcile [--dry-run] [--config PATH]\nharnessrouter prune [--older-than 7d] [--dry-run] [--config PATH]\nharnessrouter mcp-config --host codex|claude-code|opencode|pi [--config PATH]\n\nserve is the default command. init writes a disabled starter with selector local, so routing needs no decision API key. Pass --selector decisions or --decision-provider to opt into a decision provider. mcp-config prints a snippet and never edits host configuration.\nreconcile marks runs whose worker process is gone as interrupted and releases those leases. prune removes run directories older than the cutoff and never removes a run with a live lease.\n`;
 
 export interface CliIO {
   cwd?: string;
@@ -17,10 +17,10 @@ export interface CliIO {
   stdout?: (text: string) => void;
   stderr?: (text: string) => void;
 }
-interface Parsed {command: 'serve'|'init'|'doctor'|'mcp-config'|'stats'|'help'|'version'; json?:boolean;sortBy?:'time'|'tokens';taskType?:string;limit?:number; configPath?: string; host?: McpHost; scope?: 'user'|'local';selector?:'local'|'decisions';decisionProvider?:'openai'|'jev'|'ollaya'}
+interface Parsed {command: 'serve'|'init'|'doctor'|'mcp-config'|'stats'|'reconcile'|'prune'|'help'|'version'; json?:boolean;sortBy?:'time'|'tokens';taskType?:string;limit?:number; configPath?: string; host?: McpHost; scope?: 'user'|'local';selector?:'local'|'decisions';decisionProvider?:'openai'|'jev'|'ollaya'; dryRun?: boolean; olderThan?: string}
 
 function parseArgs(args: string[], cwd: string): Parsed {
-  const known = new Set(['serve', 'init', 'doctor', 'mcp-config', 'stats', '--help', '-h', '--version', '-V']);
+  const known = new Set(['serve', 'init', 'doctor', 'mcp-config', 'stats', 'reconcile', 'prune', '--help', '-h', '--version', '-V']);
   let command: Parsed['command'] = 'serve';
   let index = 0;
   if (args[0] && known.has(args[0])) {
@@ -68,6 +68,16 @@ function parseArgs(args: string[], cwd: string): Parsed {
       const value = args[index++];
       if (value !== 'openai' && value !== 'jev' && value !== 'ollaya') throw new Error('--decision-provider must be openai, jev, or ollaya');
       parsed.decisionProvider = value;
+    } else if ((flag === '--dry-run') && (command === 'reconcile' || command === 'prune')) {
+      if (seen.has(flag)) throw new Error('--dry-run may be supplied only once');
+      seen.add(flag);
+      parsed.dryRun = true;
+    } else if (flag === '--older-than' && command === 'prune') {
+      if (seen.has(flag)) throw new Error('--older-than may be supplied only once');
+      seen.add(flag);
+      const value = args[index++];
+      if (!value || value.startsWith('--')) throw new Error('--older-than requires a duration such as 7d');
+      parsed.olderThan = value;
     } else if (flag === '--help' || flag === '-h') parsed.command = 'help';
     else if (flag === '--version' || flag === '-V') parsed.command = 'version';
     else throw new Error(`Unknown argument: ${flag}`);
@@ -230,6 +240,22 @@ export async function runCli(args: string[], io: CliIO = {}): Promise<number> {
       out(parsed.json?JSON.stringify(report,null,2)+'\n':formatPerformanceReport(report));return 0;
     }
     if (parsed.command === 'doctor') return await doctor(configPath, cwd, env, out) ? 0 : 1;
+    if (parsed.command === 'reconcile' || parsed.command === 'prune') {
+      const config = loadConfig({cwd, configPath, env});
+      if (parsed.command === 'reconcile') {
+        const {reconcileLeases} = await import('./workers/lease.js');
+        const changes = await reconcileLeases(config.artifactsDir, {dryRun: parsed.dryRun === true, keepSnapshots: config.keepSnapshots === true});
+        if (!changes.length) out(parsed.dryRun ? 'No abandoned runs.\n' : 'No abandoned runs.\n');
+        for (const change of changes) out(`${parsed.dryRun ? 'would ' : ''}${change.action} ${change.runId || '(no run)'} profile=${change.profileId}: ${change.detail}\n`);
+        return 0;
+      }
+      const {parseAge, pruneRuns} = await import('./workers/prune.js');
+      const changes = await pruneRuns(config.artifactsDir, {olderThanMs: parseAge(parsed.olderThan ?? '7d'), dryRun: parsed.dryRun === true});
+      const removed = changes.filter(change => change.action === 'removed');
+      if (!removed.length) out('No run directories matched.\n');
+      for (const change of removed) out(`${parsed.dryRun ? 'would remove' : 'removed'} ${change.runId}\n`);
+      return 0;
+    }
     const {startServer} = await import('./server.js');
     await startServer({cwd, configPath, env});
     return 0;
