@@ -1,6 +1,6 @@
 # Open-source release implementation
 
-Release candidate implemented on 2026-10-17 and hardened in the 2026-10-18 final review. The current review adds canonical usage accounting, scoped probes, cancellation fixes, read-only performance reports, and the [selectable decision provider layer](DECISION_PROVIDERS.md). See [PERFORMANCE.md](PERFORMANCE.md) and the [final review](FINAL_REVIEW.md). Production sign-off and public npm publication remain pending.
+Release candidate implemented on 2026-10-17. It includes canonical usage accounting, scoped probes, cancellation fixes, read-only performance reports, and the [selectable decision provider layer](DECISION_PROVIDERS.md). See [PERFORMANCE.md](PERFORMANCE.md). Production sign-off and public npm publication remain pending.
 
 | Stage | State | Evidence |
 | --- | --- | --- |
