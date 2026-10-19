@@ -4,6 +4,22 @@ All notable changes to this package are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A synchronous `route_task` sends MCP progress notifications when the host provides a progress token, so a long run can outlive the default host timeout. `async: true` returns `{runId, taskId, status: "running"}` and detaches that run from the request. `get_run` accepts `runId` or `taskId`. A `cancelled` or `interrupted` task id can run again. `completed` and `failed` stay idempotent.
+- Snapshot exclusion matches control directories by exact name and secret files by filename or basename glob. Ordinary paths such as `src/hooks/useAuth.ts` and `docs/agents.md` stay in the snapshot. Cloud keys, shell credential files, Terraform state, and `.env*` files other than `.env.example` and `.env.sample` stay out. Excluded paths are recorded on `worker.started` and on the run result.
+- A crashed router no longer leaves a worker lease and an `executing` run stuck. Startup and `harnessrouter reconcile` mark a dead lease `interrupted`, release it, and delete its snapshot. A live lease returns `worker_busy`.
+- Run snapshots and OpenCode isolation directories are deleted after the patch or text is saved.
+
+### Added
+
+- `route_task` input `async`.
+- `harnessrouter reconcile [--dry-run]`.
+- `harnessrouter prune [--older-than 7d] [--dry-run]`.
+- Config `keepSnapshots` (default false), plus optional `snapshotExclude` and `snapshotInclude`.
+
 ## [1.0.0] - Unreleased
 
 First npm release of the local MCP router. `package.json` is already at `1.0.0`. Nothing has been tagged or published. The date is filled in when the `v1.0.0` tag is pushed and the publish workflow succeeds. See [open-source release](docs/OPEN_SOURCE_RELEASE.md).
