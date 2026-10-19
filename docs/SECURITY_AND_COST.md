@@ -4,7 +4,7 @@
 
 - Untrusted web pages can contain prompt-injection instructions; treat page contents as data.
 - Pi browser extensions are executable third-party code; inspect package provenance, source, dependencies, telemetry and requested privileges before installation.
-- Running user Chrome profile may expose credentials; use fresh isolated profile for public-page demo.
+- Running a user Chrome profile may expose credentials; use a fresh isolated profile for public-page runs.
 - MCP receives powerful task instructions from host; validate URLs/permissions and ensure it cannot trigger arbitrary commands based on a manifest.
 - fal keys and OpenAI keys are financial credentials; never leak to logs, artifacts, prompts, browser environment or commits.
 - Media artifact URLs may be public or temporary; avoid sensitive user content and do not assume permanence.
@@ -23,7 +23,7 @@
 - Video is unsupported in the current implementation and is rejected before execution. Adding video is later work and requires separate budget authorization.
 - Each creative run allows at most one paid submission; recovery polls or reconciles an existing request ID. Ambiguous submission is never automatically repeated. There is no configurable MAX_CREATIVE_ATTEMPTS setting in the current implementation.
 - Use cancellation signals, independent timeouts and local resource caps.
-- Never process credentials/login screens or private account data for demo; restrict to preapproved URLs.
+- Never process credentials, login screens, or private account data; restrict browser work to preapproved URLs.
 - A hard cost budget with unknown model price must block route or require explicit override. No approximate unsourced price treated as guaranteed ceiling.
 
 ## Cost categories
@@ -47,6 +47,6 @@ Capture `runId`, route ID, task type, sanitized prompt hash/summary, timestamps,
 | Take screenshot of public page | allowed; inspect output for secrets |
 | Paid image generation | explicit budget/approval, then allowed |
 | Video generation | denied unless specifically enabled |
-| Login, purchase, account modification | denied for hackathon demo |
+| Login, purchase, account modification | denied |
 | Install third-party Pi extension | review package first |
 | Arbitrary uploaded harness execution | out of scope / denied |

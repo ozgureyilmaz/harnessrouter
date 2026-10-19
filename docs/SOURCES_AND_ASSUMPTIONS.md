@@ -1,6 +1,6 @@
 # Sources, verification status & known assumptions
 
-Prepared **2026-10-12**. Official documentation references below describe the implementation sources; this repository and local runtime were inspected. The current environment reports configured OpenAI/fal credentials, Pi `openai-codex/gpt-5.5`, Chrome, Decisions access, and a $5 session cap. Secret values were not printed. Current budget/health and fresh run evidence are recorded in `docs/BUILD_LOG.md` and `demo/native-mcp-verification.json`.
+Prepared **2026-10-12**. Official documentation references below describe the implementation sources; this repository and local runtime were inspected. The current environment reports configured OpenAI/fal credentials, Pi `openai-codex/gpt-5.5`, Chrome, Decisions access, and a $5 session cap. Secret values were not printed. Current budget/health and fresh run evidence were recorded in local build notes.
 
 ## Official technical sources
 

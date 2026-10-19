@@ -1,5 +1,5 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
-import {join} from 'node:path';
+import {dirname,join} from 'node:path';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {loadConfig} from '../src/config.js';
@@ -28,13 +28,13 @@ const report={schemaVersion:'1.0',date:'2026-10-12',url:'https://www.agentation.
   matchedGeneration:{referenceRoutedRunId:routedImage.runId,directControl:matchedImage,exactModelInputVerified:true,inputSha256:matchedInput.plainInputSha256,seconds:{routed:routedImage.timing.totalMs/1000,direct:matchedImage.timing.totalMs/1000},decodedPixelsIdentical:routedPixels===matchedPixels,routedPixelSha256:routedPixels,directPixelSha256:matchedPixels,limits:'Same input and seed yielded different pixels. Provider nondeterminism and enabled prompt expansion may contribute; cause not isolated. One sequential pair cannot attribute latency difference to the harness.'},
   technicalVerification:{decodedArtifacts:assets.length,failedArtifacts:0,generatedImages:3,readableScreenshots:2,allGeneratedImages1024x576:assets.slice(2).every(a=>a.width===1024&&a.height===576),directThinSdkSubmissions:directImage.submissions+matchedImage.submissions},
   cost:{experimentPublishedRateEstimateUsd:directImage.cost.usd+routedImage.cost.usd+matchedImage.cost.usd+(routedBrowser.costComponents?.find((c:{provider:string})=>c.provider==='openai')?.usd??0),completeWorkflowUsd:'unknown: host Codex and Pi OAuth USD accounting unavailable',approvedSessionCapUsd:config.sessionUsd,sessionCommittedUpperBoundUsd:budget.committedUsd,sessionRemainingByLedgerUsd:Math.max(0,config.sessionUsd-budget.committedUsd)},
-  limitations:['One measured trial per condition; no statistical test','Full workflow changes harness, agent model, browser surface and prompting together','A preliminary visit preceded an interrupted turn; excluded from trial rows. Browser cache/fresh-context equivalence was not established.','Direct CUA browser durations use Date.now wall-clock measurements; routed/SDK durations use performance.now monotonic measurements.','Direct current Codex model/token usage/USD not independently observed; project requests gpt-6.1-sol/high','Pi used openai-codex/gpt-5.5, with provider-reported usage','First trial order: direct browser then routed; direct full-workflow image then routed; matched direct follows routed','CLI instrumentation setup and host waiting excluded from generation timer; direct browser wall gaps reported separately','Artifacts were previewed with source labels; no claim of blind quality grading','Read-only public site access; scoped www.agentation.com allowlist restored to example.com'],
+  limitations:['One measured trial per condition; no statistical test','Full workflow changes harness, agent model, browser surface and prompting together','A preliminary visit preceded an interrupted turn; excluded from trial rows. Browser cache/fresh-context equivalence was not established.','Direct CUA browser durations use Date.now wall-clock measurements; routed/SDK durations use performance.now monotonic measurements.','Direct current Codex model/token usage/USD not independently observed; project requests gpt-6.1-sol/high','Pi used openai-codex/gpt-5.5, with provider-reported usage','First trial order: direct browser then routed; direct full-workflow image then routed; matched direct follows routed','CLI instrumentation setup and host waiting excluded from generation timer; direct browser wall gaps reported separately','Artifacts were inspected with source labels; no claim of blind quality grading','Read-only public site access; scoped www.agentation.com allowlist restored to example.com'],
   evidence:{root:directory,directBrowserScreenshot:directBrowser.screenshotPath,routedBrowserScreenshot:routedBrowser.artifacts[0].path,directWorkflowImage:directImage.artifact.path,routedWorkflowImage:routedImage.artifacts[0].path,matchedDirectImage:matchedImage.artifact.path}};
-const out=join(config.root,'demo/paired-agentation-comparison.json');await writeFile(out,JSON.stringify(report,null,2));
+const out=join(config.root,'artifacts/paired-agentation-comparison.json');await mkdir(dirname(out),{recursive:true});await writeFile(out,JSON.stringify(report,null,2));
 const f=(v:number)=>(v/1000).toFixed(2);
 const markdown=`# Agentation canlı karşılaştırması — 2026-10-12
 
-Bu rapor aynı Codex sohbetinde yürütülen gerçek sağlayıcı ve tarayıcı işlerini karşılaştırır. Site: https://www.agentation.com/. Her koşulda yeni işler gönderildi; eski demo sonuçları kullanılmadı.
+Bu rapor aynı Codex sohbetinde yürütülen gerçek sağlayıcı ve tarayıcı işlerini karşılaştırır. Site: https://www.agentation.com/. Her koşulda yeni işler gönderildi; eski kayıtlı sonuçlar kullanılmadı.
 
 | Ölçüm | Doğrudan Codex | harnessrouter |
 |---|---:|---:|
@@ -51,7 +51,7 @@ Bu rapor aynı Codex sohbetinde yürütülen gerçek sağlayıcı ve tarayıcı 
 
 **Maliyet:** bu yeni deneyin yayımlanmış fiyatlara dayanan toplam tahmini $${report.cost.experimentPublishedRateEstimateUsd.toFixed(7)}. Tam maliyet bilinmiyor: Codex ve Pi OAuth dolar maliyeti ölçülemedi. Oturum ledger'ında $${budget.committedUsd.toFixed(3)} / $${config.sessionUsd.toFixed(2)} taahhüt var. Gerçek faturayla eşit sayılmamalı.
 
-**Kabul doğrulaması:** iki gerçek screenshot ve üç gerçek görsel decode edildi. Üç görsel de 1024×576. Tarayıcı başlığı/stili iki bağımsız yolun ölçümleriyle karşılaştırıldı. Sanatsal kalite için kör insan puanı henüz yok; önceki gösterimler kaynak etiketlerini içeriyordu.
+**Kabul doğrulaması:** iki gerçek screenshot ve üç gerçek görsel decode edildi. Üç görsel de 1024×576. Tarayıcı başlığı/stili iki bağımsız yolun ölçümleriyle karşılaştırıldı. Sanatsal kalite için kör insan puanı henüz yok; önceki çıktılar kaynak etiketlerini içeriyordu.
 
 ## Doğrudan Codex görseli
 ![Doğrudan Codex](${directImage.artifact.path})
@@ -64,4 +64,4 @@ Bu rapor aynı Codex sohbetinde yürütülen gerçek sağlayıcı ve tarayıcı 
 
 Ham sonuçlar: [paired-agentation-comparison.json](${out}). Her işin run ID, provider request ID, zamanlama, hash ve trace yolu JSON'da bulunur. Browser izin kapsamı deney sonrasında example.com'a geri döndürüldü.
 `;
-await writeFile(join(config.root,'demo/paired-agentation-comparison.md'),markdown);console.log(JSON.stringify({report:out,browserAgreement:report.browser.measuredStyleAgreement,imageSeconds:report.fullWorkflowImage.seconds,matchedSeconds:report.matchedGeneration.seconds,verification:report.technicalVerification,cost:report.cost},null,2));
+await writeFile(join(config.root,'artifacts/paired-agentation-comparison.md'),markdown);console.log(JSON.stringify({report:out,browserAgreement:report.browser.measuredStyleAgreement,imageSeconds:report.fullWorkflowImage.seconds,matchedSeconds:report.matchedGeneration.seconds,verification:report.technicalVerification,cost:report.cost},null,2));

@@ -7,7 +7,7 @@ if(result.status!==0)throw new Error('npm pack inspection failed');
 const [pack]=JSON.parse(result.stdout);
 const files=pack.files.map(file=>file.path);
 for(const path of files){
-  if(!/^(?:dist\/|contracts\/|docs\/|config\/(?:harness-registry\.yaml|\.env\.example)$|package\.json$|README\.md$|LICENSE$|CONTRIBUTING\.md$|SECURITY\.md$)/.test(path))throw new Error(`Unexpected package file: ${path}`);
+  if(!/^(?:dist\/|contracts\/|docs\/|config\/(?:harness-registry\.yaml|\.env\.example)$|package\.json$|README\.md$|LICENSE$|CONTRIBUTING\.md$|CODE_OF_CONDUCT\.md$|SECURITY\.md$)/.test(path))throw new Error(`Unexpected package file: ${path}`);
   if(/(?:^|\/)(?:node_modules|artifacts|\.git|\.env|auth\.json|credentials)(?:\/|$)/.test(path))throw new Error(`Private runtime data in package: ${path}`);
   if(path.startsWith('dist/')&&!/\.(?:js|d\.ts)$/.test(path))throw new Error(`Unexpected compiled file: ${path}`);
 }

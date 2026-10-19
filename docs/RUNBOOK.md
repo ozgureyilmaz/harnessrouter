@@ -4,12 +4,11 @@ This is the post-build runbook. Older bootstrap instructions below are retained 
 
 ## Project location
 
-Expected terminal context: `ozgur@air ~/dev/harnessrouter $`. Resolve using `cd ~/dev/harnessrouter && pwd` rather than assuming username/home absolute spelling. Prepare from within this directory.
+Run these commands from the repository root, the directory that contains `package.json`.
 
 ## Check the current checkout and runtimes
 
 ```bash
-cd ~/dev/harnessrouter
 pwd
 git status --short
 node --version
@@ -18,7 +17,7 @@ command -v pi && pi --help | head -40
 command -v codex && codex mcp --help
 ```
 
-The current checkout uses the maintained Pi package and its own restricted browser extension. Do not install the audited third-party `pi-browser-use` package for this demo.
+The current checkout uses the maintained Pi package and its own restricted browser extension. Do not install the audited third-party `pi-browser-use` package.
 
 ## Optional official docs MCP in Codex
 
@@ -41,7 +40,7 @@ Do not pass secret values directly on a command line that may be logged. Never u
 npm run typecheck
 npm test
 npm run build
-npm run demo:precheck
+npm run precheck
 npm run eval:harnesses
 npm run mcp:smoke
 ```

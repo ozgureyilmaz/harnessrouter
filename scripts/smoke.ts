@@ -23,7 +23,7 @@ if(mode==='dry'){
     return {id:f.id,expectedFamily:f.expectedRouteFamily,eligibleFamilies:families,passed,excluded:filtered.excluded,...(f.requiredCapabilities?{requiredCapabilities:f.requiredCapabilities}:{})};
   });
   const report={mode:'OFFLINE_ELIGIBILITY_ONLY',providerCalls:0,decisionsRouteAccuracy:'not measured',cases:results.length,passed:results.filter((r:{passed:boolean})=>r.passed).length,results};
-  const reportPath=process.argv[4]??join(config.root,'demo/offline-evaluation.json');await mkdir(dirname(reportPath),{recursive:true});await writeFile(reportPath,JSON.stringify(report,null,2));console.log(JSON.stringify({...report,reportPath},null,2));
+  const reportPath=process.argv[4]??join(config.root,'artifacts/offline-evaluation.json');await mkdir(dirname(reportPath),{recursive:true});await writeFile(reportPath,JSON.stringify(report,null,2));console.log(JSON.stringify({...report,reportPath},null,2));
   if(results.some((r:{passed:boolean})=>!r.passed))process.exitCode=1;
 }else if(mode==='live'){
   const router=await createRouter();

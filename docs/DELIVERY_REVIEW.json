@@ -70,46 +70,6 @@
       "sha256": "c0e5c05732ca9c9660ee310457bb3ee9faf181d19016eb091a3aa78b7b0b10a8"
     },
     {
-      "path": "demo/README.md",
-      "bytes": 5123,
-      "sha256": "dc7fa01e76a56f8edaa18019771bf9b7aedd088c75e42ba5b6952fbf5d0fd4c2"
-    },
-    {
-      "path": "demo/browser-task.json",
-      "bytes": 711,
-      "sha256": "dcf450d15441043b49be423f650718571c6d7c8d3f93a0de65560483a27893dc"
-    },
-    {
-      "path": "demo/image-task.json",
-      "bytes": 2736,
-      "sha256": "6186139d4f1a57f97ac5b4a0a7c1efa949adebeeb0415864f4b8e4cb84796692"
-    },
-    {
-      "path": "demo/live-routing-evaluation.json",
-      "bytes": 11136,
-      "sha256": "1bd7c5214783fa21de6bf0699fcda3d199d8c1429313b8fedee3bf0f0a63a97d"
-    },
-    {
-      "path": "demo/native-mcp-verification.json",
-      "bytes": 21703,
-      "sha256": "46798edbda0a998a783305a83a2e819278ecf42dcf88886cd347c499fd3ae9ff"
-    },
-    {
-      "path": "demo/offline-evaluation.json",
-      "bytes": 5668,
-      "sha256": "7a611299477532e2d4a863b57695235db96583d19cd3a7170d0afc536b2f64bc"
-    },
-    {
-      "path": "demo/provenance-audit.json",
-      "bytes": 2017,
-      "sha256": "c394d42bed9045e57af41bfd8aaa68ff5cafb366e37a66a8d60e090344736e7a"
-    },
-    {
-      "path": "demo/run-log.md",
-      "bytes": 8902,
-      "sha256": "1b377bf5266863ff1418b36d5dc0355130187f34d5b29cddd997b9ffb3a82842"
-    },
-    {
       "path": "docs/ARCHITECTURE.md",
       "bytes": 7218,
       "sha256": "4be3e6b082d7d067b8aa1da20890869739f7d89dc26fed4fb8719641a72c931f"
@@ -123,11 +83,6 @@
       "path": "docs/DELIVERY_ALLOWLIST.md",
       "bytes": 2323,
       "sha256": "c1739e67aa7a60eefb6e4c041630b5773eca51f9ec9598c152e740515404b287"
-    },
-    {
-      "path": "docs/DEMO_AND_PITCH.md",
-      "bytes": 4544,
-      "sha256": "5e2382fcc5e9d91dcb602c87e873c373213e109360f4c13c451127d1955dd618"
     },
     {
       "path": "docs/EXPERIMENTS_AND_METRICS.md",
@@ -223,11 +178,6 @@
       "path": "scripts/mcp-smoke.ts",
       "bytes": 1403,
       "sha256": "65e9819007266a56d852afa53be9be4513b4723485e14c74ad89404e0556f813"
-    },
-    {
-      "path": "scripts/metrics.ts",
-      "bytes": 5433,
-      "sha256": "65701a6bd62d9bafeaf806a682ccaa4b2c6db59daa9a8c8bcce4bdf9e0d57767"
     },
     {
       "path": "scripts/paired-browser-trial.ts",
@@ -512,8 +462,6 @@
     "dist/**",
     ".presentation-build/**",
     "presentation-output/**",
-    "demo/preview/**",
-    "demo/metrics.json",
     "AGENTS.md",
     "CODEX_BUILD_PROMPT.md",
     "START_HERE.md",

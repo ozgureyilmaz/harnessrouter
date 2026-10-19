@@ -21,15 +21,9 @@ artifacts/
 /docs/BUILD_LOG.md
 /docs/PI_AUDIT.md
 
-# Local presentation work and unsanitized demo records
+# Local presentation work
 /.presentation-build/
 /presentation-output/
-/demo/metrics.json
-/demo/paired-agentation-comparison.json
-/demo/paired-agentation-comparison.md
-
-# Local GitHub Pages build output
-/_site/
 
 # Editor and operating-system files
 .idea/
