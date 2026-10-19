@@ -2,6 +2,8 @@
 
 harnessrouter now provides a host-neutral local MCP gateway with explicit Codex, Claude Code, OpenCode and Pi worker profiles. The current host retains its conversation and final response; workers execute bounded tasks independently.
 
+Current first-run behavior: `harnessrouter init` writes `selector: "local"` and does not require a decision API key. Decision providers are an init opt-in (`--selector decisions`, or `--decision-provider openai|jev|ollaya`). Config files and processes that omit `selector` still resolve to OpenAI Decisions. The bullets below describe the candidate as it was prepared; they are not a second default.
+
 - OpenAI Decisions selection by default, explicit user choices for hosted TypeSafe Jev or local Ollaya, and deterministic local routing as an opt-out. Explicit route selection skips decision calls.
 - Isolated project snapshots with reviewable, independently checked patches; original working trees stay unchanged.
 - Controlled worker settings, bounded subprocess output/time, cancellation, exclusive leases, idempotency and reconciliation.

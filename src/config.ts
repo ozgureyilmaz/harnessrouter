@@ -51,6 +51,8 @@ export function loadConfig(options:ConfigOptions={}):RouterConfig {
     if(raw==='true')return true;if(raw==='false')return false;
     throw new RouterError('invalid_config',`${key} must be true or false`);
   };
+  // Files and processes that omit selector keep OpenAI Decisions. That is fail-closed
+  // for older configs. `harnessrouter init` writes "local" explicitly for a keyless first run.
   const selector=env.ROUTER_SELECTOR??settings.selector??'decisions';
   if(selector!=='local'&&selector!=='decisions')throw new RouterError('invalid_config','ROUTER_SELECTOR must be local or decisions');
   const decisionProvider=env.ROUTER_DECISION_PROVIDER??settings.decisionProvider??'openai';

@@ -41,7 +41,12 @@ test('init writes a private disabled configuration once and refuses overwrite', 
     assert.equal(await runCli(['init', '--config', target], {...first.io, cwd: dir, env: {}}), 0);
     const contents = await readFile(target, 'utf8');
     const config = JSON.parse(contents);
-    assert.deepEqual({selector: config.selector, decisionProvider: config.decisionProvider, decisionModel: config.decisionModel, decisionReserveUsd: config.decisionReserveUsd, dryRun: config.dryRun, allowExecution: config.allowExecution, allowPaid: config.allowPaid}, {selector: 'decisions', decisionProvider: 'openai', decisionModel: 'gpt-6-luna', decisionReserveUsd: 0.01, dryRun: true, allowExecution: false, allowPaid: false});
+    assert.deepEqual({selector: config.selector, dryRun: config.dryRun, allowExecution: config.allowExecution, allowPaid: config.allowPaid}, {selector: 'local', dryRun: true, allowExecution: false, allowPaid: false});
+    assert.equal('decisionProvider' in config, false);
+    assert.equal('decisionModel' in config, false);
+    assert.equal('decisionReserveUsd' in config, false);
+    assert.match(first.stdout, /Selector is local/);
+    assert.match(first.stdout, /--selector decisions/);
     assert.equal(config.workerProfiles.length, 4);
     assert.ok(config.workerProfiles.every((profile: {enabled: boolean; allowExecution: boolean; model: string}) => !profile.enabled && !profile.allowExecution && profile.model.startsWith('set-this-to-')));
     assert.equal((await stat(target)).mode & 0o777, 0o600);
@@ -63,7 +68,7 @@ test('init supports explicit local scope and never writes inside the package by 
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
-test('init supports a provider-specific disabled starter without keys', async () => {
+test('init opts into a provider-specific disabled decisions starter without keys', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-provider-init-'));
   try {
     const target = join(dir, 'ollaya.json');
@@ -77,11 +82,53 @@ test('init supports a provider-specific disabled starter without keys', async ()
     assert.equal(config.allowExecution, false);
     assert.equal(config.allowPaid, false);
     assert.equal('ollayaApiKey' in config, false);
+    assert.match(output.stdout, /Selector is decisions with provider ollaya/);
+  } finally { await rm(dir, {recursive: true, force: true}); }
+});
+
+test('init --selector decisions defaults the provider to OpenAI and keeps execution gates closed', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-selector-decisions-'));
+  try {
+    const target = join(dir, 'decisions.json');
+    const output = capture();
+    assert.equal(await runCli(['init', '--selector', 'decisions', '--config', target], {...output.io, cwd: dir, env: {}}), 0);
+    const config = JSON.parse(await readFile(target, 'utf8'));
+    assert.equal(config.selector, 'decisions');
+    assert.equal(config.decisionProvider, 'openai');
+    assert.equal(config.decisionModel, 'gpt-6-luna');
+    assert.equal(config.decisionReserveUsd, 0.01);
+    assert.equal(config.dryRun, true);
+    assert.equal(config.allowExecution, false);
+    assert.equal(config.allowPaid, false);
+  } finally { await rm(dir, {recursive: true, force: true}); }
+});
+
+test('init rejects a decision provider on the local selector before writing a file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-selector-conflict-'));
+  try {
+    const target = join(dir, 'conflict.json');
+    const output = capture();
+    assert.equal(await runCli(['init', '--selector', 'local', '--decision-provider', 'openai', '--config', target], {...output.io, cwd: dir, env: {}}), 1);
+    assert.match(output.stderr, /--decision-provider requires --selector decisions/);
+    await assert.rejects(readFile(target, 'utf8'));
+  } finally { await rm(dir, {recursive: true, force: true}); }
+});
+
+test('doctor reports a fresh local init as keyless and disabled', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-doctor-local-init-'));
+  try {
+    const target = join(dir, 'local.json');
+    assert.equal(await runCli(['init', '--config', target], {cwd: dir, env: {}, stdout: () => {}, stderr: () => {}}), 0);
+    const output = capture();
+    assert.equal(await runCli(['doctor', '--config', target], {...output.io, cwd: dir, env: envForCli(dir)}), 0);
+    assert.match(output.stdout, /DISABLED Decision layer: selector=local; provider=openai; model=gpt-6-luna/);
+    assert.match(output.stdout, /selector=local, provider configuration unused/);
+    assert.doesNotMatch(output.stdout, /set OPENAI_API_KEY before live Decisions selection/);
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
 test('CLI rejects invalid flags and unsupported host names without writing files', async () => {
-  for (const args of [['--unexpected'], ['mcp-config'], ['mcp-config', '--host', 'unknown'], ['init', '--scope', 'shared'], ['mcp-config', '--host', 'pi', '--host', 'pi']]) {
+  for (const args of [['--unexpected'], ['mcp-config'], ['mcp-config', '--host', 'unknown'], ['init', '--scope', 'shared'], ['init', '--selector', 'remote'], ['init', '--selector', 'local', '--selector', 'decisions'], ['mcp-config', '--host', 'pi', '--host', 'pi']]) {
     const output = capture();
     assert.equal(await runCli(args, {...output.io, cwd: tmpdir(), env: {}}), 1);
     assert.ok(output.stderr.length > 0);
@@ -105,7 +152,7 @@ test('doctor validates configuration and platform without launching worker tasks
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
-test('doctor shows active default decision provider, key presence only, and no network claim', async () => {
+test('doctor shows the omitted-selector OpenAI compatibility default, key presence only, and no network claim', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-doctor-decision-'));
   try {
     const output = capture();

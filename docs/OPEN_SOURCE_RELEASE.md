@@ -5,7 +5,7 @@ Release candidate implemented on 2026-10-17 and hardened in the 2026-10-18 final
 | Stage | State | Evidence |
 | --- | --- | --- |
 | Shared contracts and keyless local routing | passed offline | Task v1.1/result v1.3; legacy readers; explicit selection, priority ties, policy/unknown-cost checks |
-| OpenAI/Jev/Ollaya decision provider layer | implemented; fixtures verified; one OpenAI live decision-only check and local Ollaya smoke passed | OpenAI default; explicit provider choice; separate credentials; typed System One protocol; deterministic admission; no silent fallback |
+| OpenAI/Jev/Ollaya decision provider layer | implemented; fixtures verified; one OpenAI live decision-only check and local Ollaya smoke passed | Init writes local priority; omitted selector stays OpenAI; explicit provider choice; separate credentials; typed System One protocol; deterministic admission; no silent fallback |
 | Snapshot/patch boundary | passed locally | Dirty content preservation, explicit untracked capture, protected paths, limits, Git tamper checks, independent patch applicability |
 | Codex/Claude Code/OpenCode/Pi workers | implemented; offline verified | Structured protocol fixtures, real subprocess doubles, native controls; Pi genuine RPC lifecycle |
 | Process cancellation and recovery | passed locally | Output bounds, malformed events, timeout/abort, SIGTERM-ignoring descendants, exclusive/stale leases, trace-failure release |
@@ -35,7 +35,7 @@ npm run package:smoke
 
 ## Trust and execution defaults
 
-OpenAI Decisions is the default selector. Jev and local Ollaya are explicit provider choices; deterministic `selector: "local"` remains available. Missing hosted credentials and authorization never cause an automatic provider switch. Project JSON/dotenv settings require `HARNESSROUTER_TRUST_PROJECT_CONFIG=true`; an explicitly selected config file is a trusted choice. Init generates disabled profiles and no workspace grants. Global/profile execution permission and per-task unknown-cost consent are separate from priced provider authorization.
+`harnessrouter init` writes `selector: "local"`. That first-run path uses configured priority and does not need a decision API key. OpenAI Decisions, Jev, and local Ollaya are explicit opt-ins (`--selector decisions` or `--decision-provider`). A config file or process that omits `selector` still resolves to OpenAI Decisions, so older files stay fail-closed instead of silently ranking workers. Missing hosted credentials and authorization never cause an automatic provider switch. Project JSON/dotenv settings require `HARNESSROUTER_TRUST_PROJECT_CONFIG=true`; an explicitly selected config file is a trusted choice. Init generates disabled profiles and no workspace grants. Dry run, execution, and paid calls stay off. Global/profile execution permission and per-task unknown-cost consent are separate from priced provider authorization.
 
 Claude uses router-owned workspace MCP tools. Pi uses the pinned SDK's genuine RPC server, with explicit provider/model, controlled resources and bounded file tools. OpenCode supports the audited 1.18.15 ordinary native API/OAuth subset using isolated configuration/database; unsupported remote/managed configuration fails closed. Codex uses explicit model and native sandbox settings. These runtime controls are not a universal security sandbox.
 

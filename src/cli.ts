@@ -9,7 +9,7 @@ import {runProcess} from './workers/process.js';
 import type {WorkerKind, WorkerProfile, WorkerProtocol} from './workers/types.js';
 
 const HOSTS: McpHost[] = ['codex', 'claude-code', 'opencode', 'pi'];
-const HELP = `harnessrouter [serve] [--config PATH]\n\nharnessrouter init [--scope user|local] [--decision-provider openai|jev|ollaya] [--config PATH]\nharnessrouter doctor [--config PATH]\nharnessrouter stats [--sort time|tokens] [--task-type TYPE] [--limit N] [--json] [--config PATH]\nharnessrouter mcp-config --host codex|claude-code|opencode|pi [--config PATH]\n\nserve is the default command. init creates a disabled starter configuration. mcp-config prints a snippet and never edits host configuration.\n`;
+const HELP = `harnessrouter [serve] [--config PATH]\n\nharnessrouter init [--scope user|local] [--selector local|decisions] [--decision-provider openai|jev|ollaya] [--config PATH]\nharnessrouter doctor [--config PATH]\nharnessrouter stats [--sort time|tokens] [--task-type TYPE] [--limit N] [--json] [--config PATH]\nharnessrouter mcp-config --host codex|claude-code|opencode|pi [--config PATH]\n\nserve is the default command. init writes a disabled starter with selector local, so routing needs no decision API key. Pass --selector decisions or --decision-provider to opt into a decision provider. mcp-config prints a snippet and never edits host configuration.\n`;
 
 export interface CliIO {
   cwd?: string;
@@ -17,7 +17,7 @@ export interface CliIO {
   stdout?: (text: string) => void;
   stderr?: (text: string) => void;
 }
-interface Parsed {command: 'serve'|'init'|'doctor'|'mcp-config'|'stats'|'help'|'version'; json?:boolean;sortBy?:'time'|'tokens';taskType?:string;limit?:number; configPath?: string; host?: McpHost; scope?: 'user'|'local';decisionProvider?:'openai'|'jev'|'ollaya'}
+interface Parsed {command: 'serve'|'init'|'doctor'|'mcp-config'|'stats'|'help'|'version'; json?:boolean;sortBy?:'time'|'tokens';taskType?:string;limit?:number; configPath?: string; host?: McpHost; scope?: 'user'|'local';selector?:'local'|'decisions';decisionProvider?:'openai'|'jev'|'ollaya'}
 
 function parseArgs(args: string[], cwd: string): Parsed {
   const known = new Set(['serve', 'init', 'doctor', 'mcp-config', 'stats', '--help', '-h', '--version', '-V']);
@@ -56,6 +56,12 @@ function parseArgs(args: string[], cwd: string): Parsed {
       const value = args[index++];
       if (value !== 'user' && value !== 'local') throw new Error('--scope must be user or local');
       parsed.scope = value;
+    } else if (flag === '--selector' && command === 'init') {
+      if (seen.has(flag)) throw new Error('--selector may be supplied only once');
+      seen.add(flag);
+      const value = args[index++];
+      if (value !== 'local' && value !== 'decisions') throw new Error('--selector must be local or decisions');
+      parsed.selector = value;
     } else if (flag === '--decision-provider' && command === 'init') {
       if (seen.has(flag)) throw new Error('--decision-provider may be supplied only once');
       seen.add(flag);
@@ -73,23 +79,26 @@ function parseArgs(args: string[], cwd: string): Parsed {
 function defaultUserConfig(env: NodeJS.ProcessEnv): string {
   return join(env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'harnessrouter', 'config.json');
 }
-function starterSettings(provider: 'openai'|'jev'|'ollaya' = 'openai'): object {
+function starterProfiles(): WorkerProfile[] {
   const profiles: Array<[WorkerKind, string]> = [
     ['codex', 'set-this-to-a-model-you-can-use'],
     ['claude-code', 'set-this-to-a-model-you-can-use'],
     ['opencode', 'set-this-to-a-model-you-can-use'],
     ['pi', 'set-this-to-a-model-you-can-use'],
   ];
+  return profiles.map(([adapter, model], index): WorkerProfile => ({
+    id: `${adapter.replaceAll('-', '-')}-worker-${index + 1}`,
+    adapter, enabled: false, allowExecution: false, model,
+  }));
+}
+function starterSettings(selector: 'local'|'decisions', provider: 'openai'|'jev'|'ollaya' = 'openai'): object {
+  const gates = {dryRun: true, allowExecution: false, allowPaid: false, workspaceRoots: [], workerProfiles: starterProfiles()};
+  if (selector === 'local') return {selector, ...gates};
   return {
-    selector: 'decisions', decisionProvider: provider,
+    selector, decisionProvider: provider,
     decisionModel: ({openai: 'gpt-6-luna', jev: 'jev-latest', ollaya: 'laya:typed-decisions'} as const)[provider],
     decisionReserveUsd: provider === 'ollaya' ? 0 : 0.01,
-    dryRun: true, allowExecution: false, allowPaid: false,
-    workspaceRoots: [],
-    workerProfiles: profiles.map(([adapter, model], index): WorkerProfile => ({
-      id: `${adapter.replaceAll('-', '-')}-worker-${index + 1}`,
-      adapter, enabled: false, allowExecution: false, model,
-    })),
+    ...gates,
   };
 }
 
@@ -128,21 +137,23 @@ async function doctor(configPath: string|undefined, cwd: string, env: NodeJS.Pro
   const selectorActive=config.selector==='decisions';
   let decisionStatus:'ok'|'disabled'|'error'='ok';
   let decisionDetail=`selector=${config.selector}; provider=${config.decisionProvider}; model=${config.decisionModel}`;
-  if(config.decisionProvider==='openai'){
+  if(!selectorActive){
+    decisionStatus='disabled';
+    decisionDetail+='; selector=local, provider configuration unused';
+  }else if(config.decisionProvider==='openai'){
     const present=!!config.apiKey;
     decisionDetail+=`; OPENAI_API_KEY=${present?'present':'missing'}; no provider request made`;
-    if(selectorActive&&!present){decisionStatus=liveConfigured?'error':'disabled';decisionDetail+='; set OPENAI_API_KEY before live Decisions selection';}
-    else if(!selectorActive||config.dryRun||!config.allowPaid||!config.allowExecution)decisionStatus='disabled';
+    if(!present){decisionStatus=liveConfigured?'error':'disabled';decisionDetail+='; set OPENAI_API_KEY before live Decisions selection';}
+    else if(config.dryRun||!config.allowPaid||!config.allowExecution)decisionStatus='disabled';
   }else if(config.decisionProvider==='jev'){
     const present=!!config.jevApiKey;
     decisionDetail+=`; TYPESAFE_API_KEY/JEV_API_KEY=${present?'present':'missing'}; no provider request made`;
-    if(selectorActive&&!present){decisionStatus=liveConfigured?'error':'disabled';decisionDetail+='; set TYPESAFE_API_KEY (or JEV_API_KEY alias) before live Decisions selection';}
-    else if(!selectorActive||config.dryRun||!config.allowPaid||!config.allowExecution)decisionStatus='disabled';
+    if(!present){decisionStatus=liveConfigured?'error':'disabled';decisionDetail+='; set TYPESAFE_API_KEY (or JEV_API_KEY alias) before live Decisions selection';}
+    else if(config.dryRun||!config.allowPaid||!config.allowExecution)decisionStatus='disabled';
   }else{
     decisionDetail+=`; local base URL=${config.ollayaBaseUrl??'not configured'}; optional OLLAYA_API_KEY=${config.ollayaApiKey?'present':'absent'}`;
-    if(selectorActive&&!config.ollayaBaseUrl){decisionStatus=liveConfigured?'error':'disabled';decisionDetail+='; configure ROUTER_OLLAYA_BASE_URL for selection';}
-    else if(selectorActive){decisionStatus='ok';decisionDetail+='; configuration valid, no request made, live availability unverified';}
-    else{decisionStatus='disabled';decisionDetail+='; selector=local, provider configuration unused';}
+    if(!config.ollayaBaseUrl){decisionStatus=liveConfigured?'error':'disabled';decisionDetail+='; configure ROUTER_OLLAYA_BASE_URL for selection';}
+    else{decisionStatus='ok';decisionDetail+='; configuration valid, no request made, live availability unverified';}
   }
   report('Decision layer',decisionStatus,decisionDetail);
   try {
@@ -193,12 +204,18 @@ export async function runCli(args: string[], io: CliIO = {}): Promise<number> {
     if (parsed.command === 'version') { out(`${packageVersion()}\n`); return 0; }
     const configPath = parsed.configPath;
     if (parsed.command === 'init') {
+      if (parsed.selector === 'local' && parsed.decisionProvider) throw new Error('--decision-provider requires --selector decisions');
+      const selector = parsed.selector ?? (parsed.decisionProvider ? 'decisions' : 'local');
+      const provider = parsed.decisionProvider ?? 'openai';
       const target = configPath ?? (parsed.scope === 'local' ? join(cwd, '.harnessrouter', 'config.json') : defaultUserConfig(env));
       await mkdir(dirname(target), {recursive: true, mode: 0o700});
-      const contents = `${JSON.stringify(starterSettings(parsed.decisionProvider), null, 2)}\n`;
+      const contents = `${JSON.stringify(starterSettings(selector, provider), null, 2)}\n`;
       await writeFile(target, contents, {encoding: 'utf8', mode: 0o600, flag: 'wx'});
       await chmod(target, 0o600);
-      out(`Created disabled starter configuration: ${target}\nEdit model names, workspaceRoots, and profile authorization before enabling workers.\n`);
+      const selectorNote = selector === 'local'
+        ? 'Selector is local: routing uses configured priority and does not call a decision provider or need an API key.\nOpt in with --selector decisions and optionally --decision-provider openai|jev|ollaya.\n'
+        : `Selector is decisions with provider ${provider}. A hosted provider needs its API key, paid authorization, and execution permission before live selection.\n`;
+      out(`Created disabled starter configuration: ${target}\n${selectorNote}Dry run stays on, execution stays off, and paid calls stay off.\nEdit model names, workspaceRoots, and profile authorization before enabling workers.\n`);
       return 0;
     }
     if (parsed.command === 'mcp-config') {

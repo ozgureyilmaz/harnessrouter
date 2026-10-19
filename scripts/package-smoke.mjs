@@ -32,6 +32,11 @@ try{
   // No provider credentials or native account locations are inherited into the smoke server.
   const env={PATH:process.env.PATH??'/usr/bin:/bin',HOME:join(root,'home'),XDG_CONFIG_HOME:join(root,'home','config'),XDG_STATE_HOME:join(root,'home','state'),HARNESSROUTER_TRUST_PROJECT_CONFIG:'false',ROUTER_ALLOW_PAID_RUNS:'false',ROUTER_DRY_RUN:'true'};
   await mkdir(env.HOME,{recursive:true});
+  const localStarter=join(root,'local.json');
+  const localInit=spawnSync(process.execPath,[entry,'init','--config',localStarter],{cwd:project,encoding:'utf8',env});
+  if(localInit.status!==0)throw new Error(`Installed local initialization failed: ${localInit.stderr}`);
+  const localSettings=JSON.parse(await readFile(localStarter,'utf8'));
+  if(localSettings.selector!=='local'||localSettings.decisionProvider||localSettings.dryRun!==true||localSettings.allowPaid!==false||localSettings.allowExecution!==false)throw new Error('Installed default starter must be a keyless local selector with execution gates closed');
   for(const provider of ['openai','jev','ollaya']){
     const starter=join(root,`${provider}.json`);
     const initialized=spawnSync(process.execPath,[entry,'init','--decision-provider',provider,'--config',starter],{cwd:project,encoding:'utf8',env});
@@ -53,5 +58,5 @@ try{
   if(stats.status!==0||JSON.parse(stats.stdout).scope!=='router_and_worker_only')throw new Error('Installed stats CLI smoke failed');
   const answer=await client.callTool({name:'route_task',arguments:{schemaVersion:'1.1',taskId:'offline-package-smoke',prompt:'Handle this on the host',requirements:['coding'],acceptanceCriteria:[]}});
   if(answer.isError||answer.structuredContent?.status!=='defer_to_host')throw new Error('Installed package keyless host-defer smoke failed');
-  console.log(`Clean ${offline?'offline ':''}tarball install passed without optional dependencies: three provider starters, active OpenAI default, CLI exit codes, MCP handshake, four tools, registry, performance reports, and keyless host defer. No provider calls.`);
+  console.log(`Clean ${offline?'offline ':''}tarball install passed without optional dependencies: keyless local init, three decisions-provider starters, omitted-selector OpenAI compatibility default, CLI exit codes, MCP handshake, four tools, registry, performance reports, and keyless host defer. No provider calls.`);
 }finally{await client?.close().catch(()=>{});await transport?.close().catch(()=>{});await rm(root,{recursive:true,force:true});}

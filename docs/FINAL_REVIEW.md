@@ -32,7 +32,7 @@ Runtime fixture tests and local packaging are not native worker/account proof. O
 
 ## Selectable decision providers
 
-New setups now select OpenAI Decisions (`gpt-6-luna`); Jev and loopback Ollaya remain explicit user choices. Trusted local eligibility, workspace preflight and route/model bindings remain authoritative. The provider may choose only an offered route. Missing keys, unknown IDs and provider errors never silently switch providers. Explicit route pins skip the selector without deducting its reservation from execution preflight.
+At the time of this review, new setups selected OpenAI Decisions (`gpt-6-luna`); Jev and loopback Ollaya remained explicit user choices. Current `init` writes `selector: "local"`; files that omit `selector` still resolve to OpenAI Decisions. See [DECISION_PROVIDERS.md](DECISION_PROVIDERS.md). Trusted local eligibility, workspace preflight and route/model bindings remain authoritative. The provider may choose only an offered route. Missing keys, unknown IDs and provider errors never silently switch providers. Explicit route pins skip the selector without deducting its reservation from execution preflight.
 
 Jev uses the official TypeSafe System One API with a distinct TypeSafe/Jev key. Ollaya uses its native map-based System One protocol, optional local key and zero hosted reservation. Bounded HTTP transport rejects redirects and oversized/invalid responses, propagates cancellation, and makes no automatic retry. Hosted ambiguous charges retain their budget commitment. Decision traces v1.1 include provider attribution and remain compatible with v1.0. Fixture tests verify router dispatch, token/cost attribution, zero-budget host defer and all provider setup paths.
 

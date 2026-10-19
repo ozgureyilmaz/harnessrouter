@@ -1,5 +1,7 @@
 # Architecture & execution contracts
 
+A new `harnessrouter init` file uses local priority (`selector: "local"`) and does not call a decision provider. The diagram below shows the decisions path used when `selector` is `decisions`, including the compatibility default for a config that omits `selector`. Local priority and a single eligible route skip that call. See [decision providers](DECISION_PROVIDERS.md).
+
 ## System diagram
 
 ```mermaid

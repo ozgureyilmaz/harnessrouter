@@ -14,7 +14,7 @@ function envFor(cwd: string, vars: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 }
 
 
-test('default selector is active OpenAI Decisions configuration with safe execution gates', async () => withCwd(async cwd => {
+test('omitted selector stays on OpenAI Decisions with safe execution gates', async () => withCwd(async cwd => {
   const config = loadConfig({cwd, env: envFor(cwd)});
   assert.equal(config.selector, 'decisions');
   assert.equal(config.decisionProvider, 'openai');
@@ -27,7 +27,23 @@ test('default selector is active OpenAI Decisions configuration with safe execut
   assert.equal(config.apiKey, undefined);
 }));
 
-test('explicit local selector remains an opt-out', async () => withCwd(async cwd => {
+test('a config file that omits selector keeps OpenAI Decisions until it opts into local', async () => withCwd(async cwd => {
+  const configPath = join(cwd, 'router.json');
+  await writeFile(configPath, JSON.stringify({dryRun: true, allowExecution: false, allowPaid: false}));
+  const omitted = loadConfig({cwd, configPath, env: envFor(cwd)});
+  assert.equal(omitted.selector, 'decisions');
+  assert.equal(omitted.decisionProvider, 'openai');
+  assert.equal(omitted.dryRun, true);
+  assert.equal(omitted.allowExecution, false);
+  assert.equal(omitted.allowPaid, false);
+  await writeFile(configPath, JSON.stringify({selector: 'local', dryRun: false, allowExecution: true, allowPaid: false}));
+  const local = loadConfig({cwd, configPath, env: envFor(cwd)});
+  assert.equal(local.selector, 'local');
+  assert.equal(local.allowExecution, true);
+  assert.equal(local.allowPaid, false);
+}));
+
+test('ROUTER_SELECTOR=local overrides the omitted-selector decisions default', async () => withCwd(async cwd => {
   const config = loadConfig({cwd, env: envFor(cwd, {ROUTER_SELECTOR: 'local', MAX_COST_USD_PER_TASK: '0'})});
   assert.equal(config.selector, 'local');
   assert.equal(config.decisionProvider, 'openai');
