@@ -145,10 +145,10 @@ async function doctor(configPath: string|undefined, cwd: string, env: NodeJS.Pro
     const git = await runProcess('git', ['--version'], {cwd: PROJECT_ROOT, env: safeEnv, timeoutMs: 3000, maxBytes: 8192});
     report('Git', 'ok', git.stdout.trim());
   } catch { report('Git', 'error', 'git --version failed'); }
+  const profiles = config.workerProfiles ?? [];
+  if (!profiles.length) {report('Worker profiles', 'disabled', 'none configured');return ok;}
   const {getWorkerProtocols} = await import('./workers/catalog.js');
   const protocols = await getWorkerProtocols();
-  const profiles = config.workerProfiles ?? [];
-  if (!profiles.length) report('Worker profiles', 'disabled', 'none configured');
   for (const profile of profiles) {
     if (config.allowExecution !== true) {report(`Worker ${profile.id}`, 'disabled', 'global allowExecution=false; executable was not probed');continue;}
     if (!profile.enabled) {
