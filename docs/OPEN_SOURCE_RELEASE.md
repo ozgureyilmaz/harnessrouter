@@ -14,7 +14,7 @@ Release candidate implemented on 2026-10-17 and hardened in the 2026-10-18 final
 | macOS Node 24.19.0 | passed locally | Typecheck, 236 passing tests, 6 explicitly skipped live tests, build and package inspection |
 | Clean tarball install | passed locally | Optional dependencies omitted, CLI errors/version, real stdio handshake, four tools, registry and keyless host defer |
 | Linux arm64 Node 22.19.0 / 24.22.0 | passed in local containers | Fresh npm install, 236 passing tests and 6 explicit live skips on each; typecheck/build/package checks; clean consumer smoke |
-| Linux Node 22/24 CI | configured; not executed here | GitHub Actions matrix; remote result required |
+| GitHub Actions on merged source commit | passed | macOS and Linux runners, Node 22.19 and Node 24; all four jobs passed |
 | Native four-host/four-worker matrix | not run | Requires compatible native runtimes/accounts and authorized usage |
 | Live coding patches and specialist composition | not run for this release | New worker tests are opt-in; historical specialist runs are separate evidence |
 | Public npm publication | not performed | Separate release action after remaining gates |
@@ -41,7 +41,7 @@ Claude uses router-owned workspace MCP tools. Pi uses the pinned SDK's genuine R
 
 ## Remaining release gates
 
-1. Run GitHub Actions against the final committed candidate. Local checks cover macOS and Linux arm64 containers; remote runners and Linux amd64 remain separate evidence.
+1. GitHub Actions passed on the merged source commit. Local checks cover macOS and Linux arm64 containers; remote GitHub runners cover macOS and Linux x64 on Node 22 and 24.
 2. Supply compatible native runtime versions and choose models/accounts. The previously installed Claude Code 1.0.35 failed startup under the original Node 26 environment; newer runtime compatibility is not established by fixtures.
 3. Supply a Jev credential if live Jev verification is required. The OpenAI check was one bounded request; reported-token cost estimates are not invoices.
 4. Configure compatible native runtimes, choose worker models, and approve any unknown native-account usage before running host-to-worker tests, real patch tests, and specialist composition. Retain sanitized traces, model provenance and verification outcomes; repair failures before signing off.

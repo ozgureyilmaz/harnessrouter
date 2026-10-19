@@ -10,7 +10,7 @@ harnessrouter now provides a host-neutral local MCP gateway with explicit Codex,
 
 Task schema 1.1 and result schema 1.3 extend the existing contracts. Saved legacy results remain readable. New worker tasks must include workspace input and explicit unknown-cost consent. Project JSON and dotenv settings now require explicit project trust; process environment takes precedence. Writable state defaults outside the installed package.
 
-This candidate passes local offline checks on Node 22/24 and includes a live OpenAI decision-only check. The source pull request will run the remote CI matrix. Native host/worker verification and npm publication remain separate release steps. See [release gates](OPEN_SOURCE_RELEASE.md).
+This candidate passes local offline checks on Node 22/24 and includes a live OpenAI decision-only check. GitHub Actions passed on the merged source commit. Native host/worker verification and npm publication remain separate release steps. See [release gates](OPEN_SOURCE_RELEASE.md).
 
 ## Existing checkout migration
 
