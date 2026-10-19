@@ -3,6 +3,7 @@ import { chromium } from 'playwright';
 import { createAllowlistProxy, type AllowlistProxy } from './allowlist-proxy.js';
 import { assertAllowedUrl, normalizeAllowedDomains } from './policy.js';
 import { evaluationFixtureResponse, parseEvaluationFixture, type EvaluationFixture } from './eval-fixture.js';
+import { sanitizeMeasuredLinks, type MeasuredLink } from './measured-links.js';
 
 const BROWSER_ARGS = [
   '--disable-background-networking',
@@ -39,6 +40,7 @@ export interface PageObservation {
     };
     layout: { mainContentBox: { x: number; y: number; width: number; height: number } | null };
   };
+  links: MeasuredLink[];
 }
 
 export class BrowserSession {
@@ -169,9 +171,14 @@ export class BrowserSession {
         const pageBackground = bodyBackground && bodyBackground !== 'rgba(0, 0, 0, 0)'
           ? bodyBackground
           : rootStyle.backgroundColor;
+        const anchors = [...document.querySelectorAll('a')].slice(0, 24).map((anchor) => ({
+          text: (anchor.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 200),
+          href: anchor instanceof HTMLAnchorElement ? anchor.href : '',
+        }));
         return {
           visibleText: visibleText.slice(0, 12_000),
           textTruncated: visibleText.length > 12_000,
+          links: anchors,
           palette: {
             pageBackground: pageBackground || 'unknown',
             bodyText: bodyStyle.color || 'unknown',
@@ -210,6 +217,7 @@ export class BrowserSession {
           height: Math.round(mainBox.height),
         } : null },
       },
+      links: sanitizeMeasuredLinks(visual.links),
     };
   }
 
@@ -234,9 +242,14 @@ export class BrowserSession {
       const headingStyle = heading ? getComputedStyle(heading) : undefined;
       const linkStyle = firstLink ? getComputedStyle(firstLink) : undefined;
       const bodyBackground = bodyStyle.backgroundColor;
+      const anchors = [...document.querySelectorAll('a')].slice(0, 24).map((anchor) => ({
+        text: (anchor.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 200),
+        href: anchor instanceof HTMLAnchorElement ? anchor.href : '',
+      }));
       return {
         visibleText: visibleText.slice(0, 12_000),
         textTruncated: visibleText.length > 12_000,
+        links: anchors,
         palette: {
           pageBackground: bodyBackground && bodyBackground !== 'rgba(0, 0, 0, 0)' ? bodyBackground : rootStyle.backgroundColor,
           bodyText: bodyStyle.color || 'unknown',
@@ -261,6 +274,7 @@ export class BrowserSession {
         viewport, palette: data.palette, typography: data.typography,
         layout: {mainContentBox: mainBox ? {x: Math.round(mainBox.x), y: Math.round(mainBox.y), width: Math.round(mainBox.width), height: Math.round(mainBox.height)} : null},
       },
+      links: sanitizeMeasuredLinks(data.links),
     };
   }
 

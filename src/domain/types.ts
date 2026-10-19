@@ -1,8 +1,10 @@
 export interface HarnessTask {
-  schemaVersion: '1.0'; taskId: string; prompt: string; requirements: string[];
+  schemaVersion: '1.0'|'1.1'; taskId: string; prompt: string; requirements: string[];
   acceptanceCriteria: string[]; requiredCapabilities?: string[]; context?: Record<string, unknown>; allowedDomains?: string[];
-  desiredOutput?: 'text'|'screenshot'|'image'|'video'|'mixed'; maxCostUsd?: number;
+  desiredOutput?: 'text'|'screenshot'|'image'|'video'|'mixed'|'patch'; maxCostUsd?: number;
   timeoutMs?: number; allowPaidExecution?: boolean; parentRunId?: string;
+  preferredRouteId?: string; allowUnknownCost?: boolean;
+  workspace?: import('../workspace/types.js').WorkspaceRequest;
 }
 export interface Route {
   id: string; description: string; agent_model_profile?: string|null;
@@ -12,12 +14,12 @@ export interface Route {
 }
 export interface HarnessManifest {
   id: string; kind: 'external_agent_runtime'|'custom_agent_harness'|'host_defer';
-  transport: 'pi_rpc'|'in_process'|'none'; enabled: boolean; permissions: string[];
+  transport: 'pi_rpc'|'in_process'|'none'|'subprocess'; enabled: boolean; permissions: string[];
   capabilities: string[]; default_timeout_ms: number; routes: Route[];
 }
 export interface Registry {version: 1; harnesses: HarnessManifest[]}
 export interface Artifact {
-  type: 'image'|'video'|'screenshot'|'text'|'other'; path?: string; url?: string;
+  type: 'image'|'video'|'screenshot'|'text'|'other'|'patch'; path?: string; url?: string;
   mimeType?: string; verified: boolean; providerRequestId?: string;
 }
 export interface Cost {status: 'known'|'estimated'|'unknown'|'not_applicable'; usd?: number; details?: string}
@@ -45,6 +47,7 @@ export interface BenchmarkRunRecord {
   gradeEvidence?: string; gradedAt?: string;
   codex?: {threadId?: string; model?: string; modelSource?: 'requested'|'manual_import'; profile?: string; outputPath?: string; exitCode?: number; version?: string; reasoningEffort?: string; evidencePath?: string};
   usageImportHistory?: Array<{importedAt:string;evidencePath:string}>;
+  mediaImportHistory?: Array<{importedAt:string;evidencePath:string}>;
   harnessRunIds: string[]; usage: UsageRecord[]; costComponents: CostComponent[]; mediaOutputs?: MediaOutput[];
   errorCode?: string;
 }
@@ -58,7 +61,7 @@ export interface BenchmarkUsageSummary {
   cost: {providerReportedUsd:number;rateEstimateUsd:number;unknownComponents:number;perVerifiedSuccessUsd:{status:'complete'|'estimated'|'partial'|'unavailable';providerReportedUsd?:number;rateEstimateUsd?:number}};
 }
 export interface HarnessResult {
-  schemaVersion: '1.1'|'1.2'; runId: string; taskId: string;
+  schemaVersion: '1.1'|'1.2'|'1.3'; runId: string; taskId: string;
   status: 'completed'|'failed'|'rejected'|'defer_to_host'|'permission_required'|'cancelled';
   selectedRouteId: string|null; selectedHarnessId?: string|null; selectedModelId?: string|null;
   summary?: string; structuredOutput?: Record<string, unknown>; artifacts: Artifact[];
@@ -93,12 +96,15 @@ export interface ExecutionContext {
   trace: TraceSink; budget: Budget;
 }
 export interface HarnessAdapter {
-  id: string; health(): Promise<Health>;
+  id: string; health(options?: {signal?: AbortSignal}): Promise<Health>;
+  /** Adapter-specific no-network preflight and evidence verification. */
+  preflight?(task: HarnessTask, ctx: ExecutionContext): Promise<void>;
+  verify?(task: HarnessTask, output: AdapterResult, ctx: ExecutionContext): Promise<void>;
   execute(task: HarnessTask, ctx: ExecutionContext): Promise<AdapterResult>;
   cancel?(runId: string): Promise<void>; close?(): Promise<void>;
 }
 export interface DecisionTrace {
-  schemaVersion: '1.0'; runId: string; eligibleRouteIds: string[];
+  schemaVersion: '1.0'|'1.1'; decisionProvider?:import('../routing/decision-provider.js').DecisionProvider; runId: string; eligibleRouteIds: string[];
   excludedRoutes?: {id: string; reason: string}[];
   decisionStatus: 'selected'|'not_required'|'refused'|'timeout'|'unavailable'|'no_candidates'|'invalid_response';
   selectedRouteId?: string|null; confidence?: number;

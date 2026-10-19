@@ -27,7 +27,7 @@ const config=loadConfig();
 const args=process.argv.slice(2);const options=new Map<string,string>();
 for(let i=0;i<args.length;i+=2){const key=args[i];const value=args[i+1];if(!key||!value||!['--mode','--max-cost-usd','--evaluation-id'].includes(key)||options.has(key))throw new Error('Usage: eval:pilot -- --mode offline|live|regrade [--max-cost-usd 4] [--evaluation-id UUID]');options.set(key,value);}
 const mode=options.get('--mode')??'offline';if(!['offline','live','regrade'].includes(mode))throw new Error('Expected offline, live, or regrade mode');
-const maximum=Number(options.get('--max-cost-usd')??4);if(!Number.isFinite(maximum)||maximum<=0||maximum>4)throw new Error('Pilot cap must be positive and no greater than the approved $4');
+const maximum=Number(options.get('--max-cost-usd')??4);if(!Number.isFinite(maximum)||maximum<=0||maximum>4)throw new Error('Pilot cap must be positive and no greater than the configured USD 4 limit');
 const rawSuite=await readFile(join(config.root,'fixtures/pilot-suite.json'),'utf8');
 const suite=parsePilotSuite(JSON.parse(rawSuite));
 const requestedTrials=suite.cases.length*suite.repetitions;
@@ -49,19 +49,20 @@ if(mode==='offline'){
   for(const c of suite.cases)for(const step of c.steps){
     validateTask(step.task);
     if(step.fixtureId)parseEvaluationFixture({id:step.fixtureId,url:step.task.context!.url,html:await readFile(join(config.root,'fixtures/eval-pages',step.fixtureId+'.html'),'utf8')});
-    const eligible=getEligibleRoutes(step.task,registry,{'pi-browser':{available:true,provider:'openai-codex'},'fal-creative':{available:true},native:{available:true}},{allowPaid:true,dryRun:false,remainingBudgetUsd:4,allowedDomains:['example.com','www.iana.org','iana.org'],credentials:{openai:true,fal:true}});
+    const eligible=getEligibleRoutes(step.task,registry,{'pi-browser':{available:true,provider:'openai-codex'},'fal-creative':{available:true},native:{available:true}},{allowPaid:true,allowExecution:true,dryRun:false,remainingBudgetUsd:4,allowedDomains:['example.com','www.iana.org','iana.org'],credentials:{openai:true,fal:true}});
     const valid=eligible.eligible.some(entry=>entry.harness.id===step.harnessId&&(!step.routeId||entry.route.id===step.routeId));
     checks.push({caseId:c.id,stepId:step.id,valid,environment:c.environment});
   }
   console.log(JSON.stringify({mode:'offline',providerCalls:0,judgeCalls:0,requestedTrials,requestedSteps,checks},null,2));if(checks.some(c=>!c.valid))process.exitCode=1;
 }else{
   if(!config.allowPaid||config.dryRun||!config.apiKey||!config.falKey)throw new Error('Live pilot requires authorized live configuration and the existing OPENAI_API_KEY/FAL_KEY');
+  if(mode!=='regrade'&&suite.cases.some(testCase=>testCase.steps.some(step=>step.harnessId==='pi-browser'&&(!config.allowExecution||step.task.allowUnknownCost!==true))))throw new Error('Live pilot Pi tasks require ROUTER_ALLOW_EXECUTION=true and explicit task allowUnknownCost=true before any judge or provider request.');
   const priorId=options.get('--evaluation-id');if(mode==='regrade'&&(!priorId||!/^[a-f0-9-]{36}$/.test(priorId)))throw new Error('Regrade requires the original evaluation UUID');
   const id=randomUUID();const directory=join(config.artifactsDir,'evaluations',id);await mkdir(directory,{recursive:true,mode:0o700});
   const ledger=await BudgetLedger.open(config.artifactsDir,config.sessionUsd,{id,capUsd:maximum});
   let cancelled=false;const controller=new AbortController();const onInterrupt=()=>{cancelled=true;controller.abort();};process.on('SIGINT',onInterrupt);process.on('SIGTERM',onInterrupt);
   const publicConfig:RouterConfig={...config,allowedDomains:[...new Set([...config.allowedDomains,'www.iana.org','iana.org'])]};
-  const snapshot={schemaVersion:'1.1',id,suite:suite.id,suiteHash:createHash('sha256').update(rawSuite).digest('hex'),sourceHash:await sourceFingerprint(),gitCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:config.root,encoding:'utf8'}).trim(),sourceVersions:{node:process.version,deepeval:'0.9.22',judge:'gpt-6-luna/high'},startedAt:new Date().toISOString(),requestedTrials:mode==='regrade'?0:requestedTrials,requestedSteps:mode==='regrade'?0:requestedSteps,judge:{model:'gpt-6-luna',reasoning:'high',thresholdPerDimension:3,scale:[0,4],calibrated:false,deepevalVersion:'0.9.22'},maxCostUsd:maximum,authorization:'User approved this $4 pilot; session cap still applies',mode,priorEvaluationId:priorId};
+  const snapshot={schemaVersion:'1.1',id,suite:suite.id,suiteHash:createHash('sha256').update(rawSuite).digest('hex'),sourceHash:await sourceFingerprint(),gitCommit:execFileSync('git',['rev-parse','HEAD'],{cwd:config.root,encoding:'utf8'}).trim(),sourceVersions:{node:process.version,deepeval:'0.9.22',judge:'gpt-6-luna/high'},startedAt:new Date().toISOString(),requestedTrials:mode==='regrade'?0:requestedTrials,requestedSteps:mode==='regrade'?0:requestedSteps,judge:{model:'gpt-6-luna',reasoning:'high',thresholdPerDimension:3,scale:[0,4],calibrated:false,deepevalVersion:'0.9.22'},maxCostUsd:maximum,authorization:'Explicit live CLI invocation with configured paid authorization and the recorded cap; historical pilot approval is not reused.',mode,priorEvaluationId:priorId};
   const references=new Map<string,BrowserReference>();const fixtures=new Map<string,EvaluationFixture>();
   let controls:unknown[]=[];let reportStopReason:string|undefined;let lastRows:PilotTrialOutcome[]=[];let finished=false;
   let lastProgress='';
@@ -104,7 +105,8 @@ if(mode==='offline'){
       else{
         const adapter:HarnessAdapter=step.harnessId==='pi-browser'?pi:creative;const health=await adapter.health();if(!health.available)throw new Error(`Harness unavailable: ${health.reason}`);
         const registry=await loadRegistry(config.registryPath);
-        const eligible=getEligibleRoutes(task,registry,{[step.harnessId]:health,native:{available:true}},{allowPaid:true,dryRun:false,remainingBudgetUsd:Math.min(ledger.remainingUsd,task.maxCostUsd!),allowedDomains:publicConfig.allowedDomains,credentials:{openai:!!config.apiKey,fal:!!config.falKey}});
+        if(step.harnessId==='pi-browser'&&(!config.allowExecution||task.allowUnknownCost!==true))throw new Error('Direct Pi execution requires ROUTER_ALLOW_EXECUTION=true and task allowUnknownCost=true.');
+        const eligible=getEligibleRoutes(task,registry,{[step.harnessId]:health,native:{available:true}},{allowPaid:true,allowExecution:config.allowExecution,dryRun:false,remainingBudgetUsd:Math.min(ledger.remainingUsd,task.maxCostUsd!),allowedDomains:publicConfig.allowedDomains,credentials:{openai:!!config.apiKey,fal:!!config.falKey}});
         const candidate=eligible.eligible.find(entry=>entry.harness.id===step.harnessId&&(!step.routeId||entry.route.id===step.routeId));if(!candidate)throw new Error('Expected direct route is ineligible under current policy');
         const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(step.harnessId==='pi-browser'?config.piTaskTimeoutMs:config.falTaskTimeoutMs)]);
         const context:ExecutionContext={runId,routeId:candidate.route.id,route:candidate.route,modelProfileId:candidate.route.agent_model_profile??undefined,budgetUsd:Math.min(task.maxCostUsd!,ledger.remainingUsd),signal,artifactsDir:trace.directory,trace,budget:ledger.forRun(runId,task.maxCostUsd!)};

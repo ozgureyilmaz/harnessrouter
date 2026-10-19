@@ -19,6 +19,7 @@ if(process.argv.includes('--version')){process.stdout.write('codex-cli 0.144.4\\
 if(process.env.OPENAI_API_KEY||process.env.FAL_KEY||process.env.GH_TOKEN)process.exit(66);
 const fs=require('node:fs');
 const args=process.argv;fs.writeFileSync(args[args.indexOf('--output-last-message')+1],'');
+if(args[args.indexOf('--sandbox')+1]!=='read-only')process.exit(67);
 process.stdin.resume();process.stdin.on('end',()=>{
  console.log(JSON.stringify({type:'thread.started',thread_id:'offline-thread'}));
  console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'Offline fixture final response.'}}));
@@ -57,11 +58,18 @@ test('desktop CLI records manual usage, imports a receipt, grades, and reports w
     const id=JSON.parse(output.stdout).benchmarkRunId;
     const costs=join(f.dir,'cost.json');await writeFile(costs,JSON.stringify([{provider:'fal',source:'local receipt',status:'provider_reported',usd:.02,requestId:'offline-receipt'}]));
     await cli(['import-cost','--artifacts-dir',f.artifacts,'--run-id',id,'--file',costs]);
+    const media=join(f.dir,'media.json');await writeFile(media,JSON.stringify([{provider:'unknown',kind:'image',count:1}]));
+    await cli(['import-media','--artifacts-dir',f.artifacts,'--run-id',id,'--file',media,'--evidence','Offline fixture image inspection']);
+    await assert.rejects(()=>cli(['import-media','--artifacts-dir',f.artifacts,'--run-id',id,'--file',media,'--evidence','Duplicate import']),/already imported/);
     await cli(['grade','--artifacts-dir',f.artifacts,'--run-id',id,'--outcome','verified_success','--evidence','Offline reviewer fixture']);
     await cli(['report','--artifacts-dir',f.artifacts]);
     const report=JSON.parse(await readFile(join(f.artifacts,'benchmark/summary.json'),'utf8'));
     assert.equal(report.byArm.codex_direct.cost.providerReportedUsd,.02);
     assert.equal(report.byArm.codex_direct.verifiedSuccessRate,1);
+    assert.equal(report.byArm.codex_direct.mediaByProviderModel['unknown/unknown'].images,1);
+    const saved=JSON.parse(await readFile(join(f.artifacts,'benchmark/runs',id+'.json'),'utf8'));
+    const mediaEvidence=JSON.parse(await readFile(join(f.artifacts,saved.mediaImportHistory[0].evidencePath),'utf8'));
+    assert.equal(mediaEvidence.measurement,'manual_import');
     assert.equal(report.byArm.codex_direct.usageByProviderModel['openai-codex/gpt-6.1-sol'].measurementCounts.manual_import,1);
   }finally{await rm(f.dir,{recursive:true,force:true});}
 });

@@ -16,6 +16,8 @@ These commands launch real Codex work and may use provider resources. The runner
 
 Failed CLI events retain only an allowlisted error category (model availability, authentication, rate limits, MCP startup, or transport) when recognizable. Raw error messages and stderr are discarded to avoid persisting credentials or private task text. Unrecognized failures retain an exit-code category. An unavailable model must be resolved explicitly and recorded; missing token counters are never treated as zero.
 
+The benchmark runner explicitly requests a read-only host shell sandbox. MCP adapters still write their authorized artifacts through their own runtime policy. The 2026-10-12 pilot preceded this explicit flag and inherited the local CLI permission configuration; its records must not be relabeled as having used this later flag.
+
 Defaults: `--timeout-ms 180000`, `--repetitions 1`, `--server-name harnessrouter`, `--reasoning-effort high`. `--profile` selects an existing Codex profile. A failed or timed-out CLI execution stops the repetition loop. All commands accept `--artifacts-dir /absolute/path` to select a measurement root; linked router artifacts must exist under the same root. The normal root is the router's configured `ARTIFACTS_DIR`, including the local `.env` setting.
 
 The pinned [Codex 0.144.4 event schema](https://github.com/openai/codex/blob/rust-v0.144.4/codex-rs/exec/src/exec_events.rs) defines input, cached input, output and reasoning output counters. MCP links use its `structured_content` field. Collection uses emitted events, not private Codex storage or account-wide quota deltas. CLI counter provenance is conservatively labeled `platform_estimated`; absence of counters produces `unavailable`. The recorded model is the requested CLI model, with `modelSource: requested`; JSONL does not independently confirm its runtime identity.
@@ -71,6 +73,8 @@ For a direct Codex tool's bill, import a local JSON array of cost components:
 ```
 
 The USD value above is illustrative. Use `rate_estimate` with a recorded rate/calculation in `source` or `details` when no receipt exists. Use `unknown` and omit `usd` when unresolved. `import-cost --run-id UUID --file /absolute/path/costs.json` imports these components. A receipt supersedes a linked estimate for the same provider request in the report; the request is counted once. Subscription fees are never allocated to tasks.
+
+Direct Codex images can be reviewed and counted with `import-media --run-id UUID --file /absolute/path/media.json --evidence "Decoded image and source output inspected: /absolute/path/image.png"`. The file is an array such as `[{"provider":"unknown","kind":"image","count":1}]`; use the actual provider/model only when exposed by source evidence. A private sidecar records manual provenance and review evidence. Include all direct outputs in one import; duplicate imports are refused. Generated images have no assumed text-token equivalent, and an unreturned image-generation charge must be imported as an `unknown` cost component. Report generation also marks text-provider usage without a matching per-task USD cost as unknown.
 
 Grade both arms against the same prewritten acceptance criteria:
 

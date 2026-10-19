@@ -28,7 +28,7 @@ export function normalizeUsageRecord(input: NormalizeUsageInput): UsageRecord {
   assign(tokens, 'outputTokens', count(raw, ['outputTokens', 'output_tokens', 'output', 'completion_tokens']));
   assign(tokens, 'cachedInputTokens', count(raw, ['cachedInputTokens', 'cached_input_tokens', 'cacheRead', 'cache_read_input_tokens'])??count(inputDetails,['cached_tokens']));
   assign(tokens, 'cacheWriteInputTokens', count(raw, ['cacheWriteInputTokens', 'cache_write_input_tokens', 'cacheWrite']));
-  assign(tokens, 'reasoningOutputTokens', count(raw, ['reasoningOutputTokens', 'reasoning_output_tokens', 'reasoning_tokens', 'reasoningTokens'])??count(outputDetails,['reasoning_tokens']));
+  assign(tokens, 'reasoningOutputTokens', count(raw, ['reasoningOutputTokens', 'reasoning_output_tokens', 'reasoning_tokens', 'reasoningTokens', 'reasoning'])??count(outputDetails,['reasoning_tokens']));
   const reportedTotal = count(raw, ['totalTokens', 'total_tokens', 'total']);
   if (reportedTotal !== undefined) tokens.totalTokens = reportedTotal;
   else if (tokens.inputTokens !== undefined && tokens.outputTokens !== undefined) {
@@ -37,11 +37,11 @@ export function normalizeUsageRecord(input: NormalizeUsageInput): UsageRecord {
 
   const hasAny = Object.keys(tokens).length > 0;
   const hasCore = tokens.inputTokens !== undefined && tokens.outputTokens !== undefined;
-  const consistent=(!hasCore||tokens.totalTokens===tokens.inputTokens!+tokens.outputTokens!)&&(tokens.cachedInputTokens===undefined||tokens.inputTokens===undefined||tokens.cachedInputTokens<=tokens.inputTokens)&&(tokens.reasoningOutputTokens===undefined||tokens.outputTokens===undefined||tokens.reasoningOutputTokens<=tokens.outputTokens);
+  const consistent=(!hasCore||tokens.totalTokens===tokens.inputTokens!+tokens.outputTokens!)&&(tokens.cachedInputTokens===undefined||tokens.inputTokens===undefined||tokens.cachedInputTokens<=tokens.inputTokens)&&(tokens.cacheWriteInputTokens===undefined||tokens.inputTokens===undefined||tokens.cacheWriteInputTokens<=tokens.inputTokens)&&(tokens.cachedInputTokens===undefined||tokens.cacheWriteInputTokens===undefined||tokens.inputTokens===undefined||tokens.cachedInputTokens+tokens.cacheWriteInputTokens<=tokens.inputTokens)&&(tokens.reasoningOutputTokens===undefined||tokens.outputTokens===undefined||tokens.reasoningOutputTokens<=tokens.outputTokens);
   const completeness = !hasAny ? 'unavailable' : hasCore && consistent && !input.forcePartial ? 'complete' : 'partial';
   return {
     schemaVersion: '1.0', provider: input.provider, ...(input.model ? {model: input.model} : {}),
-    source: input.source, measurement: input.measurement, completeness, tokens,
+    source: input.source, measurement: hasAny ? input.measurement : 'unavailable', completeness, tokens,
     ...(input.details ? {details: input.details.slice(0, 500)} : {}),
   };
 }
@@ -63,7 +63,8 @@ export function normalizePiUsage(input:{provider:string;model?:string;counters?:
   const cacheRead=count(raw,['cacheRead']);const cacheWrite=count(raw,['cacheWrite']);
   const normalized={...raw};
   if(uncached!==undefined&&cacheRead!==undefined&&cacheWrite!==undefined)normalized.inputTokens=uncached+cacheRead+cacheWrite;
-  const usage=normalizeUsageRecord({provider:input.provider,model:input.model,source:input.source??'pi_session_stats',measurement:Object.keys(raw).length?'provider_reported':'unavailable',counters:normalized,forcePartial:uncached!==undefined&&(cacheRead===undefined||cacheWrite===undefined),details:'Pi SDK input excludes cache; normalized input includes cacheRead and cacheWrite. Session totals include compaction and retries; SDK estimated USD is not a subscription charge.'});
+  else if('input' in raw){delete normalized.input;delete normalized.inputTokens;}
+  const usage=normalizeUsageRecord({provider:input.provider,model:input.model,source:input.source??'pi_session_stats',measurement:Object.keys(raw).length?'provider_reported':'unavailable',counters:normalized,forcePartial:uncached!==undefined&&(cacheRead===undefined||cacheWrite===undefined),details:'Pi SDK input excludes cache; normalized input includes cacheRead and cacheWrite. SDK estimated USD is not a subscription charge.'});
   return usage;
 }
 

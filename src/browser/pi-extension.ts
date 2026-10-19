@@ -123,6 +123,7 @@ export default function piBrowserExtension(pi: ExtensionAPI): void {
           sourceUrl,
           pageTitle: observation.title,
           visualStyle: observation.visualStyle,
+          links: observation.links,
           screenshotPath: resolve(baseDir, `pi-browser-${policy.runId}.png`),
         }), { flag: 'wx', mode: 0o600 });
         observations += 1;
@@ -135,6 +136,7 @@ export default function piBrowserExtension(pi: ExtensionAPI): void {
               title: observation.title,
               visibleText: observation.text,
               truncated: observation.textTruncated,
+              links: observation.links,
               visualStyle: observation.visualStyle,
             }),
           }],

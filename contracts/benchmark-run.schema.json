@@ -140,6 +140,7 @@
         "$ref": "#/$defs/costComponent"
       }
     },
+    "mediaImportHistory": {"$ref": "#/properties/usageImportHistory"},
     "mediaOutputs": {
       "type": "array",
       "items": {

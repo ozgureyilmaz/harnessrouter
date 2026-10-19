@@ -33,6 +33,22 @@ test('criterion evaluation uses verified browser evidence and leaves subjective 
   assert.equal(results[4]?.verifier,'none');
 });
 
+test('criterion evaluation requires a measured https link for href checks',()=>{
+  const missing=evaluateCriteria({acceptanceCriteria:['Measured href']},{
+    status:'completed',
+    structuredOutput:{websiteObservations:{sourceUrl:'https://example.com/',pageTitle:'Example',links:[]}},
+    artifacts:[],
+  });
+  assert.equal(missing[0]?.status,'failed');
+  const present=evaluateCriteria({acceptanceCriteria:['Measured href']},{
+    status:'completed',
+    structuredOutput:{websiteObservations:{links:[{text:'Learn more',href:'https://www.iana.org/help/example-domains'}]}},
+    artifacts:[],
+  });
+  assert.equal(present[0]?.status,'passed');
+  assert.equal(present[0]?.evidence,'structuredOutput.websiteObservations.links');
+});
+
 test('criterion evaluation does not treat agent completion as artifact evidence',()=>{
   const results=evaluateCriteria({acceptanceCriteria:['Readable screenshot']},{
     status:'completed',structuredOutput:{summary:'Screenshot captured'},artifacts:[],

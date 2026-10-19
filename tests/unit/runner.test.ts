@@ -11,8 +11,8 @@ import type {HarnessTask} from '../../src/domain/types.js';
 import sharp from 'sharp';
 const task:HarnessTask={schemaVersion:'1.0',taskId:'mock-native',prompt:'Refactor repository TypeScript',requirements:['coding'],acceptanceCriteria:[],maxCostUsd:.25};
 const imageTask:HarnessTask={...task,taskId:'mock-image',prompt:'Create a simple test illustration',requirements:['text_to_image','image'],desiredOutput:'image',allowPaidExecution:true};
-async function makeRouter(choice='fal-creative:image-fast'){
-  const root=await mkdtemp(join(tmpdir(),'hr-runner-'));const config={...loadConfig(),artifactsDir:root,allowPaid:true,dryRun:false,apiKey:undefined,falKey:'unit-test-only'};
+async function makeRouter(choice='fal-creative:image-fast',patch:Partial<ReturnType<typeof loadConfig>>={}){
+  const root=await mkdtemp(join(tmpdir(),'hr-runner-'));const config={...loadConfig(),selector:'decisions' as const,allowPaid:true,dryRun:false,apiKey:undefined,falKey:'unit-test-only',...patch,artifactsDir:root};
   let calls=0;
   const decisions=new DecisionsClient({allowPaid:true,dryRun:false,client:{decisions:{create(){calls++;return{withResponse:async()=>({request_id:'mock-id',data:{model:'gpt-6-luna',answers:[{type:'choice',name:'execution_route',choice}],usage:{input_tokens:100,output_tokens:10,total_tokens:110}}})};}}}});
   const mockAdapter={id:'fal-creative',health:async()=>({available:true}),execute:async(_task:HarnessTask,ctx:{artifactsDir:string})=>{
@@ -56,6 +56,18 @@ test('mocked runner: unsupported required capability is rejected before Decision
   }finally{await fixture.close();}
 });
 
+test('mocked runner: ROUTER_IMAGE_ROUTE pins one image profile and skips Decisions',async()=>{
+  const fixture=await makeRouter('fal-creative:image-quality',{imageRoute:'fast'});try{
+    const result=await fixture.router.routeTask({...imageTask,taskId:'pinned-fast'});
+    assert.equal(result.status,'completed');
+    assert.equal(result.selectedRouteId,'fal-creative:image-fast');
+    assert.equal(fixture.calls,0);
+    const decision=JSON.parse(await readFile(join(fixture.root,result.runId,'decision.json'),'utf8'));
+    assert.equal(decision.decisionStatus,'not_required');
+    assert.equal(decision.reason,'single_eligible_route');
+  }finally{await fixture.close();}
+});
+
 test('mocked runner: a sole eligible specialist route executes without a Decisions choice request',async()=>{
   const fixture=await makeRouter();try{
     const taskWithOneProfile={...imageTask,taskId:'single-eligible-route',requiredCapabilities:['media.text_to_image'],context:{creativeOptions:{quality:'high'}}};
@@ -66,6 +78,23 @@ test('mocked runner: a sole eligible specialist route executes without a Decisio
     const decision=JSON.parse(await readFile(join(fixture.root,result.runId,'decision.json'),'utf8'));
     assert.equal(decision.decisionStatus,'not_required');
     assert.equal(decision.reason,'single_eligible_route');
+  }finally{await fixture.close();}
+});
+
+test('mocked runner: explicit route preflight receives the full budget when selection is skipped',async()=>{
+  const fixture=await makeRouter();try{
+    const budgets:number[]=[];
+    fixture.router.adapters[0]!.preflight=async(_task,context)=>{budgets.push(context.budgetUsd);assert.ok(context.budgetUsd>=.003);};
+    const result=await fixture.router.routeTask({...imageTask,taskId:'pinned-budget',preferredRouteId:'fal-creative:image-fast',maxCostUsd:.003});
+    assert.equal(result.status,'completed',JSON.stringify(result.error));assert.equal(fixture.calls,0);assert.deepEqual(budgets,[.003,.003]);
+  }finally{await fixture.close();}
+});
+
+test('mocked runner: static image pin does not require a selection reserve',async()=>{
+  const fixture=await makeRouter(undefined,{imageRoute:'fast'});try{
+    fixture.router.adapters[0]!.preflight=async(_task,context)=>{assert.ok(context.budgetUsd>=.003);};
+    const result=await fixture.router.routeTask({...imageTask,taskId:'static-pin-budget',maxCostUsd:.003});
+    assert.equal(result.status,'completed',JSON.stringify(result.error));assert.equal(result.selectedRouteId,'fal-creative:image-fast');assert.equal(fixture.calls,0);
   }finally{await fixture.close();}
 });
 

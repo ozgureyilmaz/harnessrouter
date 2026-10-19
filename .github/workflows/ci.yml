@@ -1,0 +1,42 @@
+name: Offline checks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ['22.19.0', '24']
+    env:
+      CI: 'true'
+      ROUTER_DRY_RUN: 'true'
+      ROUTER_ALLOW_PAID_RUNS: 'false'
+      OPENAI_API_KEY: ''
+      FAL_KEY: ''
+      PI_BROWSER_INTEGRATION: '0'
+      FAL_LIVE_TESTS: 'false'
+      HARNESSROUTER_LIVE_WORKERS: '0'
+      HARNESSROUTER_ACCEPT_UNKNOWN_COST: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run package:check
+      - run: npm run package:smoke

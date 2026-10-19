@@ -3,7 +3,7 @@ import {resolve,sep} from 'node:path';
 import {createHash} from 'node:crypto';
 import {lookup} from 'node:dns/promises';
 import {isIP} from 'node:net';
-import sharp from 'sharp';
+
 import {RouterError,checkAbort} from '../domain/errors.js';
 export function isPublicAddress(ip:string):boolean {
   if(isIP(ip)===4){const [a,b]=ip.split('.').map(Number);return !(a===0||a===10||a===127||a>=224||a===169&&b===254||a===172&&b>=16&&b<=31||a===192&&(b===168||b===0)||a===100&&b>=64&&b<=127||a===198&&(b===18||b===19));}
@@ -26,6 +26,7 @@ export async function verifyImage(path:string,options:{expectedRatio?:number;sig
   if(options.signal)checkAbort(options.signal);
   const buffer=await readFile(path);if(!buffer.length||buffer.length>20*1024*1024)throw new RouterError('artifact_invalid','Image has invalid byte size');
   try {
+    const {default:sharp}=await import('sharp');
     const meta=await sharp(buffer,{limitInputPixels:20_000_000}).metadata();
     const mimes:Record<string,string>={png:'image/png',jpeg:'image/jpeg',webp:'image/webp'};
     if(!meta.format||!mimes[meta.format]||!meta.width||!meta.height)throw new Error('Unsupported image');

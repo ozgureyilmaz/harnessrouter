@@ -3,6 +3,7 @@ import type {DecisionCreateParams} from 'openai/resources/decisions.js';
 import {performance} from 'node:perf_hooks';
 import {RouterError, checkAbort} from '../domain/errors.js';
 import type {Budget, Cost, HarnessTask, TraceSink} from '../domain/types.js';
+import type {DecisionProvider} from './decision-provider.js';
 import {redact} from '../observability/trace.js';
 
 export const DECISION_RESERVE_USD = 0.01;
@@ -35,6 +36,7 @@ export interface DecisionUsage {
 }
 
 export interface DecisionResult extends ParsedDecision {
+  provider?:DecisionProvider;
   latencyMs: number;
   providerDecisionId?: string;
   cost: Cost;
@@ -61,6 +63,7 @@ export interface DecisionsClientOptions {
   apiKey?: string;
   model?: string;
   timeoutMs?: number;
+  reservationUsd?: number;
   allowPaid: boolean;
   dryRun: boolean;
   /** Injection point for offline tests; production uses the official OpenAI SDK. */
@@ -127,11 +130,16 @@ export function parseDecision(response: unknown, choices: readonly DecisionChoic
  * transport failure, retrying could create an untracked second charge.
  */
 export class DecisionsClient {
+  readonly provider='openai' as const;
+  readonly requiresPaid=true;
+  readonly reservationUsd:number;
   private readonly api: DecisionsApiClient | undefined;
   private readonly model: string;
   private readonly timeoutMs: number;
 
   constructor(private readonly options: DecisionsClientOptions) {
+    this.reservationUsd=options.reservationUsd??DECISION_RESERVE_USD;
+    if(!Number.isFinite(this.reservationUsd)||this.reservationUsd<=0)throw new RouterError('invalid_config','Decision reservation must be positive and finite');
     this.model = options.model ?? DEFAULT_MODEL;
     this.timeoutMs = options.timeoutMs ?? 15_000;
     if (this.model !== DEFAULT_MODEL) throw new RouterError('invalid_config', `Decisions routing is pinned to ${DEFAULT_MODEL}`);
@@ -179,15 +187,15 @@ export class DecisionsClient {
         choices: choices.map(({value, description}) => ({value, description: boundedText(description, 500)})),
       }],
     };
-    const reservationId = await budget.reserve(DECISION_RESERVE_USD, 'OpenAI Decisions route selection');
+    const reservationId = await budget.reserve(this.reservationUsd, 'OpenAI Decisions route selection');
     const started = performance.now();
     try {
       checkAbort(signal);
       await trace.event('decision.requested', {
-        model: this.model,
+        provider:this.provider,model: this.model,
         question: QUESTION_NAME,
         eligibleRouteIds: choices.map(choice => choice.value),
-        reservedUsd: DECISION_RESERVE_USD,
+        reservedUsd: this.reservationUsd,
         request: redact(requestBody),
       });
     } catch (error) {
@@ -208,7 +216,7 @@ export class DecisionsClient {
         details: 'The request may have reached the provider; exact usage was not returned',
       });
       await trace.event('decision.failed', {
-        model: this.model,
+        provider:this.provider,model: this.model,
         code: failure.code,
         ...metadata,
         latencyMs,
@@ -224,7 +232,7 @@ export class DecisionsClient {
     let responseTraceError: unknown;
     try {
       await trace.event('decision.response', {
-        providerDecisionId: response.request_id ?? undefined,
+        provider:this.provider,providerDecisionId: response.request_id ?? undefined,
         response: redact(sanitizeDecisionResponse(raw)),
       });
     } catch (error) {
@@ -239,20 +247,20 @@ export class DecisionsClient {
     } catch (error) {
       const failure = error instanceof RouterError ? error : new RouterError('invalid_decision', 'Decision response could not be parsed');
       await trace.event(failure.code === 'decision_refused' ? 'decision.refused' : 'decision.invalid_response', {
-        model: this.model, ...(response.request_id?{providerDecisionId:response.request_id}:{}),
+        provider:this.provider,model: this.model, ...(response.request_id?{providerDecisionId:response.request_id}:{}),
         ...(usage?{usage}:{}), code: failure.code, latencyMs, cost,
       });
       throw failure;
     }
 
     const result: DecisionResult = {
-      ...parsed,
+      ...parsed,provider:this.provider,
       latencyMs,
       ...(response.request_id ? {providerDecisionId: response.request_id} : {}),
       cost,
     };
     await trace.event('decision.completed', {
-      routeId: result.routeId,
+      routeId: result.routeId,provider:this.provider,
       model: result.model,
       ...(result.confidence === undefined ? {} : {confidence: result.confidence}),
       ...(result.probabilities === undefined ? {} : {probabilities: result.probabilities}),
@@ -265,7 +273,7 @@ export class DecisionsClient {
   }
 }
 
-function decisionInput(task: HarnessTask): string {
+export function decisionInput(task: HarnessTask): string {
   const parts = [
     `Objective:\n${task.prompt.slice(0, 12_000)}`,
     `Required capabilities: ${boundedText(task.requirements.join(', '), 2_000)}`,

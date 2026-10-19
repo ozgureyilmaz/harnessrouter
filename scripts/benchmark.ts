@@ -8,14 +8,14 @@ import {performance} from 'node:perf_hooks';
 import {loadConfig} from '../src/config.js';
 import type {BenchmarkRunRecord} from '../src/domain/types.js';
 import {normalizeUsageRecord,parseCodexJsonl} from '../src/observability/metering.js';
-import {benchmarkDirectory,buildBenchmarkReport,createDesktopBenchmarkRun,gradeBenchmarkRun,importUsageIntoBenchmarkRun,importBenchmarkCosts,linkHarnessRuns,saveBenchmarkRun,updateBenchmarkRun,writeBenchmarkSummary} from '../src/observability/benchmark-store.js';
+import {benchmarkDirectory,buildBenchmarkReport,createDesktopBenchmarkRun,gradeBenchmarkRun,importUsageIntoBenchmarkRun,importBenchmarkCosts,importBenchmarkMedia,linkHarnessRuns,saveBenchmarkRun,updateBenchmarkRun,writeBenchmarkSummary} from '../src/observability/benchmark-store.js';
 import {validateBenchmarkRun} from '../src/domain/schemas.js';
 
 interface BenchmarkCase {caseId:string;prompt:string}
 interface RunOptions {caseFile:string;arm:'codex_direct'|'codex_harnessrouter';model:string;profile?:string;repetitions:number;timeoutMs:number;codexPath:string;serverName:string;reasoningEffort:string;version:string}
 
 function parseFlags(args:string[]):{command:string;values:Map<string,string[]>} {
-  const command=args[0];if(!command||!['run','record-desktop','import-usage','import-cost','link-harness','grade','report'].includes(command))throw new Error('Use one of: run, record-desktop, import-usage, import-cost, link-harness, grade, report.');
+  const command=args[0];if(!command||!['run','record-desktop','import-usage','import-cost','import-media','link-harness','grade','report'].includes(command))throw new Error('Use one of: run, record-desktop, import-usage, import-cost, import-media, link-harness, grade, report.');
   const values=new Map<string,string[]>();
   for(let i=1;i<args.length;i++){
     const key=args[i]!;if(!key.startsWith('--'))throw new Error(`Unexpected argument: ${key}`);
@@ -45,7 +45,7 @@ async function runOne(options:RunOptions,task:BenchmarkCase,repetition:number,ar
   const startedAt=new Date().toISOString();const start=performance.now();
   const initial:BenchmarkRunRecord={schemaVersion:'1.0',benchmarkRunId,caseId:task.caseId,arm:options.arm,repetition,promptHash:createHash('sha256').update(task.prompt).digest('hex'),startedAt,timestampSource:'run_time',status:'interrupted',outcome:'ungraded',codex:{model:options.model,modelSource:'requested',version:options.version,reasoningEffort:options.reasoningEffort,evidencePath:relative(artifactsDir,evidencePath),...(options.profile?{profile:options.profile}:{}),outputPath:relative(artifactsDir,outputPath)},harnessRunIds:[],usage:[normalizeUsageRecord({provider:'openai-codex',model:options.model,source:'codex_cli_jsonl',measurement:'unavailable',details:'Codex CLI has not returned usage counters for this run.'})],costComponents:[]};
   await saveBenchmarkRun(artifactsDir,initial);
-  const args=['exec','--json','--ephemeral','--model',options.model];
+  const args=['exec','--json','--ephemeral','--sandbox','read-only','--model',options.model];
   if(options.profile)args.push('--profile',options.profile);
   args.push('--config',`model_reasoning_effort=${JSON.stringify(options.reasoningEffort)}`,'--config',`mcp_servers.${options.serverName}.enabled=${options.arm==='codex_harnessrouter'}`);
   if(options.arm==='codex_harnessrouter')args.push('--config',`mcp_servers.${options.serverName}.required=true`);
@@ -77,7 +77,10 @@ async function executeCodex(command:string,args:string[],prompt:string,timeoutMs
     const lines=createInterface({input:child.stdout});const sanitizedEvents:string[]=[];
     let evidenceWrites=Promise.resolve();let writeFailed=false;let diagnosticCode:string|undefined;let lastAgentMessage:string|undefined;
     lines.on('line',line=>{
-      try{const event=JSON.parse(line);if(event.type==='item.completed'&&event.item?.type==='agent_message'&&typeof event.item.text==='string')lastAgentMessage=event.item.text.slice(0,1_000_000);}catch{/* Malformed events have no reviewable answer. */}
+      try{const event=JSON.parse(line);if(event.type==='item.completed'&&event.item?.type==='agent_message'){
+        const text=typeof event.item.text==='string'?event.item.text:typeof event.item.content==='string'?event.item.content:undefined;
+        if(text)lastAgentMessage=text.slice(0,1_000_000);
+      }}catch{/* Malformed events have no reviewable answer. */}
       const projection=projectCodexEvent(line,serverName);
       if(projection){const event=JSON.parse(projection);if(typeof event.diagnosticCode==='string')diagnosticCode=event.diagnosticCode;sanitizedEvents.push(projection);evidenceWrites=evidenceWrites.then(()=>writeFile(evidencePath,projection+'\n',{flag:'a',mode:0o600})).catch(()=>{writeFailed=true;stop();});}
     });
@@ -127,7 +130,8 @@ function projectCodexEvent(line:string,serverName:string):string|undefined {
     // commands, tool payloads, or message text.
     if(typeof type==='string'&&/^[a-zA-Z0-9._-]{1,80}$/.test(type)){
       const item=isRecord(parsed.item)?parsed.item:{};
-      return JSON.stringify({type,...(typeof item.type==='string'&&/^[a-zA-Z0-9._-]{1,80}$/.test(item.type)?{item:{type:item.type}}:{})});
+      const messageShape=item.type==='agent_message'?{fields:Object.keys(item).filter(key=>/^[a-zA-Z0-9._-]{1,80}$/.test(key)),textLength:typeof item.text==='string'?item.text.length:null,contentType:typeof item.content}:undefined;
+      return JSON.stringify({type,...(typeof item.type==='string'&&/^[a-zA-Z0-9._-]{1,80}$/.test(item.type)?{item:{type:item.type,...(messageShape?{messageShape}:{})}}:{})});
     }
   }catch{/* Ignore non-JSON and malformed Codex output without persisting it. */}
   return undefined;
@@ -209,6 +213,13 @@ values.delete('--artifacts-dir');
 if(command==='run')await runCommand(values);
 else if(command==='record-desktop')await recordDesktopCommand(values);
 else if(command==='import-usage')await importUsageCommand(values);
+else if(command==='import-media'){
+  ensureOnly(values,['--run-id','--file','--evidence']);
+  const media=JSON.parse(await readFile(resolve(one(values,'--file',true)!),'utf8'));
+  if(!Array.isArray(media))throw new Error('Media import JSON must contain an array of image/video unit records.');
+  const updated=await importBenchmarkMedia(benchmarkArtifactsDir,one(values,'--run-id',true)!,media,one(values,'--evidence',true)!);
+  console.log(JSON.stringify({benchmarkRunId:updated.benchmarkRunId,mediaOutputs:updated.mediaOutputs,mediaImportHistory:updated.mediaImportHistory}));
+}
 else if(command==='import-cost'){
   ensureOnly(values,['--run-id','--file']);
   const components=JSON.parse(await readFile(resolve(one(values,'--file',true)!),'utf8'));
