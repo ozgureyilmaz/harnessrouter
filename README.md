@@ -63,7 +63,15 @@ git, and at least one worker installed and signed in on its own.
 
 ## install
 
-until an npm release is published, install from a checkout:
+the public npm name `harnessrouter` was free on 2026-10-19. once `1.0.0` is published, install it with:
+
+```bash
+npm install -g harnessrouter
+```
+
+that publish has not happened yet. the `NPM_TOKEN` secret, provenance, and tag steps are in [open-source release](docs/OPEN_SOURCE_RELEASE.md).
+
+until the package is on npm, install from a checkout:
 
 ```bash
 git clone https://github.com/ozgureyilmaz/harnessrouter.git
@@ -73,7 +81,7 @@ npm run build
 npm link --ignore-scripts
 ```
 
-the command is `harnessrouter`. after `npm pack`, a local tarball installs with `npm install -g /absolute/path/to/harnessrouter-1.0.0.tgz`.
+the command is `harnessrouter`. `npm pack` writes `harnessrouter-1.0.0.tgz`. install that tarball with `npm install -g /absolute/path/to/harnessrouter-1.0.0.tgz`.
 
 ## setup
 
@@ -201,6 +209,8 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [performance](docs/PERFORMANCE.md)
 - [security and cost](docs/SECURITY_AND_COST.md)
 - [security](SECURITY.md)
+- [changelog](CHANGELOG.md)
+- [open-source release](docs/OPEN_SOURCE_RELEASE.md)
 - [contributing](CONTRIBUTING.md)
 - [code of conduct](CODE_OF_CONDUCT.md)
 - [deepwiki](https://deepwiki.com/ozgureyilmaz/harnessrouter)

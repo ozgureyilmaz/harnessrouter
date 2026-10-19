@@ -1,0 +1,65 @@
+name: Publish to npm
+
+# Pushing a version tag is the only publish trigger. This workflow does not
+# create the tag or a GitHub Release.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    env:
+      CI: 'true'
+      ROUTER_DRY_RUN: 'true'
+      ROUTER_ALLOW_PAID_RUNS: 'false'
+      OPENAI_API_KEY: ''
+      FAL_KEY: ''
+      PI_BROWSER_INTEGRATION: '0'
+      FAL_LIVE_TESTS: 'false'
+      HARNESSROUTER_LIVE_WORKERS: '0'
+      HARNESSROUTER_ACCEPT_UNKNOWN_COST: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+      - run: npm ci
+      - name: Require a release tag that matches package.json
+        run: |
+          node --input-type=module <<'EOF'
+          import {readFile} from 'node:fs/promises';
+          const tag = process.env.GITHUB_REF_NAME ?? '';
+          const version = JSON.parse(await readFile('package.json', 'utf8')).version;
+          if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(tag) || tag.slice(1) !== version) {
+            console.error(`Refusing to publish. Tag ${tag || '(missing)'} must be v${version} with no prerelease suffix.`);
+            process.exit(1);
+          }
+          console.log(`Tag ${tag} matches package.json ${version}.`);
+          EOF
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run package:check
+      - run: npm run package:smoke
+      - name: Publish with provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret is empty. Add it to the repository secrets before pushing a version tag."
+            exit 1
+          fi
+          npm publish --provenance --access public
