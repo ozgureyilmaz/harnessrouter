@@ -23,7 +23,8 @@ An offline pinned-dispatch fixture confirmed the optimized path avoids unrelated
 
 - macOS Node 22.19.0: actual runtime version checked; typecheck, full suite **236 passed / 0 failed / 6 explicit live skips**, build and package inspection.
 - macOS Node 24.19.0: typecheck, full suite **236 passed / 0 failed / 6 explicit live skips**, build and package inspection.
-- Linux arm64 Node 22.19.0 / npm 10.9.3 and Node 24.22.0 / npm 11.19.1: fresh installs, **236 passed / 0 failed / 6 explicit live skips** on each, typecheck/build/package checks and clean consumer smoke. This is local container evidence; remote CI and Linux amd64 remain pending.
+- Linux arm64 Node 22.19.0 / npm 10.9.3 and Node 24.22.0 / npm 11.19.1: fresh installs, **236 passed / 0 failed / 6 explicit live skips** on each, typecheck/build/package checks and clean consumer smoke.
+- GitHub Actions on the merged source commit: all four macOS/Linux x64 jobs for Node 22.19 and Node 24 passed, including clean package smoke.
 - Clean tarball smoke verifies the installed executable, CLI error codes, optional-dependency omission, actual stdio handshake, four tools, local performance reports, registry and keyless host defer.
 - Existing dirty user work is retained. No reset, broad cleanup, staging, commit, push or public publication is part of this review.
 
