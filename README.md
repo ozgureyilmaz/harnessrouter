@@ -1,28 +1,98 @@
 # harnessrouter
 
-**one agent. multiple harnesses. one reviewable result.**
+🧭 *one agent. many harnesses. one reviewable result.*
 
-harnessrouter lets your current agent hand a bounded task to an independent Codex, Claude Code, OpenCode, or Pi worker through MCP. The worker can return text or a reviewable patch, with artifacts and execution traces. Your host agent keeps its context and owns the final answer.
+local mcp router. your current agent hands a bounded task to codex, claude code, opencode, or pi, and gets text or a patch back.
 
-The core capability is **cross-harness interoperability**. Better outcomes, speed, token use, and cost are goals to measure, not promises. Worker protocols are implemented and checked offline; a complete live host/worker matrix has not been verified. See [compatibility](docs/COMPATIBILITY.md) for current support and limits.
+[![CI](https://github.com/ozgureyilmaz/harnessrouter/workflows/Offline%20checks/badge.svg)](https://github.com/ozgureyilmaz/harnessrouter/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ozgureyilmaz/harnessrouter)
 
-## what you can do
+## features
 
-- Ask one agent to delegate a bounded review or coding task to another harness.
-- Choose a configured worker and model, or let an enabled decision provider select from eligible routes.
-- Run workers against isolated snapshots and review a patch before applying it.
-- Inspect run status, artifacts, token measurements, elapsed time, and known cost coverage.
-- Keep Codex, Claude Code, OpenCode, and Pi independent; MCP is the gateway between them.
+cross-harness workers: codex, claude code, opencode, and pi stay independent. mcp is the gateway.
+
+route choice: pin a worker, use local priority, or let a decision provider pick among routes that are already eligible.
+
+isolated work: the worker gets a git snapshot. edits return as a patch. your repository is not changed for you.
+
+inspectable runs: `list_harnesses`, `route_task`, `get_run`, and `cancel_run`.
+
+## how it works
+
+```mermaid
+flowchart TD
+    Host[Host agent] --> MCP[harnessrouter MCP server]
+    MCP --> Filter[Eligible routes]
+    Filter --> Pick{How is the route chosen?}
+    Pick -->|"preferredRouteId or one route"| Direct[Use that route]
+    Pick -->|local priority| Rank[Highest configured priority]
+    Pick -->|decisions| Provider[Decision provider]
+    Provider --> Offered{Id was eligible?}
+    Offered -->|no| Closed[Fail closed]
+    Direct --> Kind{Worker or host?}
+    Rank --> Unique{Unique top priority?}
+    Unique -->|no| Defer[Defer to the host]
+    Unique -->|yes| Kind
+    Offered -->|yes| Kind
+    Kind -->|host| Defer
+    Kind -->|"codex, claude code, opencode, or pi"| Adapter[Worker adapter]
+    Adapter --> Snap[Isolated Git snapshot]
+    Snap --> Result[Text or patch]
+    Result --> Host
+    Defer --> Host
+```
+
+the decision provider chooses a route id. it does not choose the worker model. openai decisions uses `gpt-6-luna`. typesafe jev and local ollaya are the other providers. a bad id, or a provider error, stops the run instead of switching providers. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Host as Host agent
+    participant MCP as harnessrouter MCP
+    participant Selector as Selector
+    participant Worker as Worker adapter
+
+    User->>Host: Bounded task
+    Host->>MCP: list_harnesses
+    MCP-->>Host: Routes, health, and policy
+    Host->>MCP: route_task
+    MCP->>MCP: Validate the task and keep eligible routes
+    alt preferredRouteId, one route, or local priority
+        MCP->>Selector: Select without a provider call
+    else decisions selector and several routes
+        MCP->>Selector: Choose among eligible route ids
+        Selector-->>MCP: Route id
+        MCP->>MCP: Accept the id only if it was offered
+    end
+    MCP->>Worker: Run Codex, Claude Code, OpenCode, or Pi
+    Worker->>Worker: Prepare an isolated Git snapshot
+    Worker-->>MCP: Text or patch
+    MCP-->>Host: Result and runId
+    opt Saved run
+        Host->>MCP: get_run(runId)
+        MCP-->>Host: Result, decision, and status
+    end
+    opt Still running
+        Host->>MCP: cancel_run(runId)
+        MCP-->>Host: cancelled true, or false if it already finished
+    end
+    Host-->>User: Review the text or patch
+```
+
+the same `taskId` returns a finished run. if a call times out, use `get_run` before sending that task again.
 
 ## requirements
 
-- macOS or Linux; Windows users can use WSL2. Native Windows is not supported.
-- Node.js **22.19+ in the Node 22 line, or Node 24**.
-- At least one supported worker installed and authenticated separately.
+macos or linux. windows through wsl2.
+
+node.js 22.19+ on the node 22 line, or node 24.
+
+git, and at least one worker installed and signed in on its own.
 
 ## install
 
-Until an npm release is published, install from a checkout:
+until an npm release is published, install from a checkout:
 
 ```bash
 git clone https://github.com/ozgureyilmaz/harnessrouter.git
@@ -32,20 +102,17 @@ npm run build
 npm link --ignore-scripts
 ```
 
-The local command is `harnessrouter`. A locally built tarball can also be installed with `npm install -g /absolute/path/to/harnessrouter-VERSION.tgz`. Registry installation will be `npm install -g harnessrouter` after publication.
+the command is `harnessrouter`. after `npm pack`, a local tarball installs with `npm install -g /absolute/path/to/harnessrouter-1.0.0.tgz`.
 
-## configure a worker
+## setup
 
-Install and authenticate your chosen harness through its own supported setup. harnessrouter does not copy worker credentials into its JSON config, and it does not discover the models available to a worker.
-
-Create and inspect a config:
+create a starter file. it ships with dry run on, execution off, and every worker disabled:
 
 ```bash
 harnessrouter init --config ./harnessrouter.config.json
-harnessrouter doctor --config ./harnessrouter.config.json
 ```
 
-`init` writes disabled examples with dry run enabled. To explicitly enable a Codex worker, update the generated config with your project path and a model supported by your local runtime/account:
+enable one worker. use a model your installed runtime accepts, and an absolute project path:
 
 ```json
 {
@@ -69,33 +136,51 @@ harnessrouter doctor --config ./harnessrouter.config.json
 }
 ```
 
-Run `doctor` again after editing. It checks local configuration and runtime compatibility; it does not prove authentication or make a model call. An incompatible runtime stays unavailable.
+```bash
+harnessrouter doctor --config ./harnessrouter.config.json
+```
 
-This example chooses local route priority and opts out of decision-provider selection. `init` defaults to `selector: "decisions"` with OpenAI Decisions; dry-run and execution gates remain closed until configured.
+`doctor` checks node, git, and the worker cli. it does not call a model. worker logins stay in each harness. this file does not store them.
 
-> **Cost and execution:** enabling a worker authorizes independent execution and usage whose per-run USD charge may be unknown. Native subscriptions or API accounts can incur usage even when `allowPaid` is `false`. Every worker task must set `allowUnknownCost: true`. Dry run validates routing without launching a worker.
+`init` defaults to `selector: "decisions"`. the example above uses local priority so one worker can run without a decision call. a worker can spend its own subscription or api account, and the usd amount may be unknown, so each task sets `allowUnknownCost` to true.
 
-### config and state files
+config defaults to `~/.config/harnessrouter/config.json` (`$XDG_CONFIG_HOME` when set). run data defaults to `~/.local/state/harnessrouter`. process environment overrides the file. spend and snapshot limits: [security and cost](docs/SECURITY_AND_COST.md).
 
-Configuration defaults to `$XDG_CONFIG_HOME/harnessrouter/config.json` or `~/.config/harnessrouter/config.json`. Project config at `.harnessrouter/config.json` and project `.env` defaults load only when `HARNESSROUTER_TRUST_PROJECT_CONFIG=true`; review them before enabling that setting. Use `--config` or `HARNESSROUTER_CONFIG` for an explicit config path. Process environment takes precedence, and explicit `--config` files are trusted choices. Runtime data is stored outside the installed package, by default under `~/.local/state/harnessrouter`.
-
-## connect your agent
-
-Print an MCP snippet for the host you use:
+print an mcp snippet and paste it into the host. this does not edit host settings:
 
 ```bash
 harnessrouter mcp-config --host codex --config ./harnessrouter.config.json
 ```
 
-Supported host names are `codex`, `claude-code`, `opencode`, and `pi`. Add the printed configuration through that client's normal MCP setup, then reload the connection. This command prints configuration; it does not edit host settings. `harnessrouter serve` starts the stdio server, and running `harnessrouter` without a subcommand also serves MCP.
+hosts are `codex`, `claude-code`, `opencode`, and `pi`. reload the host after you add the snippet. `harnessrouter` with no subcommand serves mcp on stdio.
 
-The MCP server provides four tools: `list_harnesses`, `route_task`, `get_run`, and `cancel_run`. Start by inspecting eligible workers, then submit a bounded task. Example read-only request:
+## usage
+
+### cli
+
+```bash
+harnessrouter doctor --config ./harnessrouter.config.json
+harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort time
+harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort tokens --json
+```
+
+`stats` reads saved runs. sorting does not change routing. see [performance](docs/PERFORMANCE.md).
+
+### with your agent
+
+after mcp is connected, ask things like:
+
+- "use `list_harnesses`, then ask the best available worker to review this module. three findings, with file and line references. do not edit."
+- "delegate this change to the opencode worker. return a patch limited to `src/router/`."
+- "call `get_run` for the latest run and summarize status, artifacts, time, and tokens."
+
+a read-only `route_task` looks like this. the route id is the profile id plus `:configured`.
 
 ```json
 {
   "schemaVersion": "1.1",
   "taskId": "readme-review-001",
-  "prompt": "Read README.md and identify up to three concrete documentation gaps. Do not edit files.",
+  "prompt": "Read README.md and name up to three concrete documentation gaps. Do not edit files.",
   "requirements": ["review"],
   "acceptanceCriteria": [],
   "desiredOutput": "text",
@@ -108,118 +193,9 @@ The MCP server provides four tools: `list_harnesses`, `route_task`, `get_run`, a
 }
 ```
 
-For an edit, use `requirements: ["coding"]`, `desiredOutput: "patch"`, and `workspace.mode: "patch"`. Include untracked files only when the task needs them. Use a new task ID for new work; if a call times out, inspect `get_run` before retrying the same task.
+for an edit, use `requirements` `["coding"]`, `desiredOutput` `"patch"`, and `workspace.mode` `"patch"`. you review the patch before applying it. known secret names, `.git`, and dependency directories stay out of the snapshot. see [security](SECURITY.md) and [adapters](docs/ADAPTERS.md).
 
-### ask your agent
-
-Once MCP is connected, prompts can be as simple as:
-
-- “Use `list_harnesses` and ask the best available worker to review this module. Return the three highest-risk findings, with file and line references. Do not edit.”
-- “Delegate this bounded change to the OpenCode worker. Return a patch limited to `src/router/` and explain how it meets the acceptance criteria.”
-- “Check the latest run with `get_run`. Summarize its status, artifacts, elapsed time, token data, and any unknown cost.”
-
-The host agent chooses whether to delegate, reviews the returned result, and remains responsible for the final response and for applying any patch.
-
-## how routing works
-
-```mermaid
-flowchart TD
-    A[Host agent] --> B[list_harnesses]
-    B --> C[Eligibility and local preflight]
-    C --> D{Eligible route?}
-    D -- no --> N[No route or defer to host]
-    D -- yes --> E{Selection mode}
-    E -- pinned or local --> F[Configured route / local priority]
-    E -- decisions --> G[Configured decision provider]
-    G --> H[Validate returned route ID against eligible routes]
-    F --> I[Run independent harness worker]
-    H --> I
-    I --> J[Verify result and collect trace/artifacts]
-    J --> K[Return text or reviewable patch to host]
-    G -. provider or response failure .-> X[Fail closed; no silent provider switch]
-    H -. invalid route .-> X
-```
-
-Only reachable, enabled, policy-eligible routes are offered to decision selection. The router validates the selected route against that filtered set. A decision model selects a route; it does not configure or discover the worker's model. Unsupported tasks return a clear no-route/defer result rather than silently running elsewhere.
-
-### route task sequence
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant Host as Host agent
-    participant MCP as harnessrouter MCP
-    participant Policy as Eligibility and policy
-    participant Decision as Decision provider (optional)
-    participant Worker as Independent harness worker
-
-    User->>Host: Request bounded task
-    Host->>MCP: list_harnesses
-    MCP->>Policy: Check configuration, reachability, and task eligibility
-    Policy-->>MCP: Eligible routes (or no route)
-    MCP-->>Host: Routes and capabilities
-    Host->>MCP: route_task(task, workspace, budget)
-    MCP->>Policy: Recheck gates and workspace rules
-    alt Decision selection enabled
-        Policy->>Decision: Request selection from eligible route IDs
-        Decision-->>Policy: Candidate route ID
-        Policy->>Policy: Validate candidate belongs to eligible set
-    else Pinned route or local selection
-        Policy->>Policy: Select configured eligible route
-    end
-    Policy->>Worker: Execute bounded task in isolated snapshot
-    Worker-->>MCP: Text or patch plus execution result
-    MCP->>MCP: Verify result and record trace/artifacts
-    MCP-->>Host: HarnessResult, run ID, and artifact references
-    Host-->>User: Review and summarize; apply patch only after review
-```
-
-## decision providers
-
-Decision selection defaults to the OpenAI Decisions API, pinned to `gpt-6-luna`. Users can select TypeSafe JEV or local Ollaya; provider errors do not silently switch to another provider or local ranking.
-
-| Provider | Setup |
-| --- | --- |
-| OpenAI Decisions | `OPENAI_API_KEY` |
-| TypeSafe JEV | `TYPESAFE_API_KEY` or `JEV_API_KEY` |
-| Ollaya local | System One-compatible API, default `http://127.0.0.1:11435`; `OLLAYA_API_KEY` is optional and local-only |
-| Local ranking | Set `selector: "local"` to use configured priority or `preferredRouteId` without a decision API call |
-
-Set `decisionProvider: "jev"` or `ROUTER_DECISION_PROVIDER=jev` to select JEV. See [decision provider configuration](docs/DECISION_PROVIDERS.md). The decision provider selects a route, not its model.
-
-## measure time and tokens
-
-```bash
-harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort time
-harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort tokens --json
-```
-
-Reports include measured elapsed time, canonical token counts, data coverage, criterion outcomes, and unknown costs. Host conversation usage is excluded. MCP clients can request `list_harnesses` with `includePerformance: true`. Measurements can help you choose a `preferredRouteId` or trusted profile priorities; sorting does not change routing or prove equivalent quality. Cached input and reasoning are counted once. Missing and legacy counters are not zeros. See [performance measurements and limits](docs/PERFORMANCE.md).
-
-## workspace and security
-
-Workers receive an isolated Git snapshot of tracked content, including existing dirty edits and deletions. Untracked files require explicit inclusion. The original repository is not automatically patched. Snapshot policy excludes known secret filenames, agent instructions, hooks, inherited harness settings, `.git`, and dependency directories; symlinks, hardlinks, and unsafe paths are rejected.
-
-Patch results include `workspace.patch`, a changed-file manifest, the captured baseline fingerprint, and a SHA256 digest. Review the patch and account for later source edits before applying it. Applicability does not mean semantic correctness. Read-only writes, protected-file writes, Git metadata tampering, and empty requested patches fail explicitly.
-
-Native workers are not uniformly sandboxed by the operating system. File exclusions and runtime tool restrictions cannot guarantee prevention of writes elsewhere or recognition of secrets under arbitrary filenames. See [security](SECURITY.md), [adapter boundaries](docs/ADAPTERS.md), and [security and cost](docs/SECURITY_AND_COST.md).
-
-## optional specialists
-
-The source checkout includes opt-in Pi browser and fal image routes. Pi runs a real RPC agent with isolated public-browser tools. Browser actions do not support login, forms, payments, downloads, or private profiles. Fal uses model-specific planning, budget admission, durable request tracking, bounded recovery, and decoded image verification. Video generation is disabled. Composed tasks pass observations into a separate task with parent/context provenance.
-
-Specialist execution requires `ROUTER_ALLOW_PAID_RUNS=true`, `ROUTER_DRY_RUN=false`, and finite approved budgets. Pi browser execution additionally requires `ROUTER_ALLOW_EXECUTION=true` and task `allowUnknownCost: true`, regardless of decision provider. Unknown native host/Pi subscription USD is not capped by priced reservations.
-
-For local setup, copy `config/.env.example` to an ignored `.env`, protect it with `chmod 600 .env`, and edit it locally. Set `HARNESSROUTER_TRUST_PROJECT_CONFIG=true` only after reviewing project configuration. `OPENAI_API_KEY` may also authenticate a Pi OpenAI provider; configure Pi through its documented provider authentication rather than an invented `PI_API_KEY`. `FAL_KEY` supplies fal. `doctor` reports credential presence and configured loopback URLs only; it makes no provider or model request.
-
-Daily-use examples are in [config/daily-tasks.json](config/daily-tasks.json):
-
-```bash
-npm run domain:allow -- developer.mozilla.org
-npm run task:compose -- <browser-run-id>
-```
-
-Reload MCP after changing allowlists or rebuilding. `ROUTER_IMAGE_ROUTE=fast|quality` pins an image profile and skips a selection call; task `creativeOptions.quality=fast|high` overrides it. `auto` allows both profiles. Browser link targets are recorded in `websiteObservations.links`; the related acceptance criterion is `Measured href`.
+a source checkout can also turn on a pi browser route and a fal image route. they stay off until you opt in. [compatibility](docs/COMPATIBILITY.md).
 
 ## development
 
@@ -229,17 +205,29 @@ npm run typecheck
 npm test
 npm run build
 npm run package:check
-npm run package:smoke
 ```
 
-Default tests use local fixtures/provider doubles; skipped opt-in live tests are not live evidence. CI supplies no provider credentials and makes no model calls. Contributor setup and verification are in [CONTRIBUTING.md](CONTRIBUTING.md); protocol details and extension interfaces are in [docs/ADAPTERS.md](docs/ADAPTERS.md).
+tests use local fixtures. ci does not call a model. contributor notes: [contributing](CONTRIBUTING.md).
 
-## demos and evidence
+the recorded demo replays saved artifacts: [github pages](https://ozgureyilmaz.github.io/harnessrouter/). preview it locally:
 
-The [recorded Pages demo](https://ozgureyilmaz.github.io/harnessrouter/) replays captured specialist artifacts without provider calls. Historical runs do not establish the current native worker matrix. A browser-only pilot recorded native 4/4 versus Pi 3/4 task checks with different timing boundaries. A host-only composed run remained partial and failed exact 16:9. The [three-pair creative pilot](demo/creative-pilot-20261012.md) established no quality or efficiency advantage; total host/Pi USD was unknown.
+```bash
+python3 -m http.server 4173 --bind 127.0.0.1 --directory demo/preview
+```
 
-See [current status review](docs/CURRENT_STATUS_REVIEW.md), [compatibility](docs/COMPATIBILITY.md), [live pilot methods](docs/LIVE_EVALUATION.md), [recorded pilot results](docs/LIVE_EVALUATION_RESULTS.md), [metering](docs/LOCAL_METERING.md), and [open-source release gates](docs/OPEN_SOURCE_RELEASE.md). `npm run eval:pilot` checks contracts offline; live evaluation and benchmark commands launch real work and require execution/spend authorization. Missing counters remain unavailable and estimates remain distinct from invoices.
+## links
 
-The [Pages workflow](.github/workflows/pages.yml) publishes only `demo/preview/`. See [demo publishing notes](demo/preview/README.md) for export and validation. Preview locally with `python3 -m http.server 4173 --bind 127.0.0.1 --directory demo/preview`.
-
-[architecture](docs/ARCHITECTURE.md) · [runbook](docs/RUNBOOK.md) · [security and cost](docs/SECURITY_AND_COST.md) · [license](LICENSE)
+- [issues](https://github.com/ozgureyilmaz/harnessrouter/issues)
+- [mcp docs](https://modelcontextprotocol.io/docs)
+- [architecture](docs/ARCHITECTURE.md)
+- [compatibility](docs/COMPATIBILITY.md)
+- [decision providers](docs/DECISION_PROVIDERS.md)
+- [adapters](docs/ADAPTERS.md)
+- [performance](docs/PERFORMANCE.md)
+- [security and cost](docs/SECURITY_AND_COST.md)
+- [security](SECURITY.md)
+- [contributing](CONTRIBUTING.md)
+- [recorded demo](https://ozgureyilmaz.github.io/harnessrouter/)
+- [demo notes](demo/preview/README.md)
+- [pages workflow](.github/workflows/pages.yml)
+- [deepwiki](https://deepwiki.com/ozgureyilmaz/harnessrouter)
