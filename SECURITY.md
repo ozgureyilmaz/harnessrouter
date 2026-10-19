@@ -28,4 +28,4 @@ Optional Pi browser execution uses isolated public sessions and disallows accoun
 
 ## Local artifacts
 
-Runs persist results, provenance, sanitized traces, and artifacts outside the installed package. Local prompts and source-derived outputs can still be sensitive after redaction. Review artifacts before sharing. Keep private workspaces and runtime state out of published tarballs. The package check and static-demo validation verify their specific allowlists; they do not audit arbitrary files on your machine.
+Runs persist results, provenance, sanitized traces, and artifacts outside the installed package. Local prompts and source-derived outputs can still be sensitive after redaction. Review artifacts before sharing. Keep private workspaces and runtime state out of published tarballs. The package check verifies its allowlist; it does not audit arbitrary files on your machine.

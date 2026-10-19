@@ -209,12 +209,6 @@ npm run package:check
 
 tests use local fixtures. ci does not call a model. contributor notes: [contributing](CONTRIBUTING.md).
 
-the recorded demo replays saved artifacts: [github pages](https://ozgureyilmaz.github.io/harnessrouter/). preview it locally:
-
-```bash
-python3 -m http.server 4173 --bind 127.0.0.1 --directory demo/preview
-```
-
 ## links
 
 - [issues](https://github.com/ozgureyilmaz/harnessrouter/issues)
@@ -227,7 +221,4 @@ python3 -m http.server 4173 --bind 127.0.0.1 --directory demo/preview
 - [security and cost](docs/SECURITY_AND_COST.md)
 - [security](SECURITY.md)
 - [contributing](CONTRIBUTING.md)
-- [recorded demo](https://ozgureyilmaz.github.io/harnessrouter/)
-- [demo notes](demo/preview/README.md)
-- [pages workflow](.github/workflows/pages.yml)
 - [deepwiki](https://deepwiki.com/ozgureyilmaz/harnessrouter)

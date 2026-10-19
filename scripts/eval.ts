@@ -1,5 +1,5 @@
-import {readFile,writeFile} from 'node:fs/promises';
-import {join} from 'node:path';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {dirname,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {createRouter} from '../src/create-router.js';
 import {getEligibleRoutes} from '../src/registry/eligibility.js';
@@ -31,6 +31,6 @@ try{
   }
   const semantic=results.filter(r=>r.method==='LIVE_DECISIONS_CLASSIFICATION');
   const report={mode:'LIVE_ROUTING_LABEL_EVALUATION_NO_HARNESS_EXECUTION',cases:results.length,correct:results.filter(r=>r.passed).length,liveDecisionCases:semantic.length,liveDecisionCorrect:semantic.filter(r=>r.passed).length,liveDecisionLabelAccuracy:semantic.length?semantic.filter(r=>r.passed).length/semantic.length:null,confusionMatrix:confusion,results,limits:'One phrasing per fixture; public example URL supplied only for policy admission. Native/unsupported cases are deterministic. Classification is not task completion, model quality or efficiency.'};
-  await writeFile(join(config.root,'demo/live-routing-evaluation.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({cases:report.cases,correct:report.correct,liveDecisionCases:report.liveDecisionCases,liveDecisionCorrect:report.liveDecisionCorrect,accuracy:report.liveDecisionLabelAccuracy,confusionMatrix:confusion,output:'demo/live-routing-evaluation.json'},null,2));
+  const output=join(config.root,'artifacts/live-routing-evaluation.json');await mkdir(dirname(output),{recursive:true});await writeFile(output,JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({cases:report.cases,correct:report.correct,liveDecisionCases:report.liveDecisionCases,liveDecisionCorrect:report.liveDecisionCorrect,accuracy:report.liveDecisionLabelAccuracy,confusionMatrix:confusion,output:'artifacts/live-routing-evaluation.json'},null,2));
   if(results.some(r=>!r.passed))process.exitCode=1;
 }finally{await router.close();}

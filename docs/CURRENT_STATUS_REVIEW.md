@@ -23,7 +23,7 @@ The pasted “build before / 0 of 9 complete” plan is historical. Most foundat
 | Composition provenance | PASS | Second task parentRunId and observations exactly match first output; current planner reproduces canonical observation and submitted-input fingerprints. |
 | Supported criteria | PASS | Browser 4/4 mechanical criteria; image 3/3 mechanical criteria. Visual similarity remains explicitly unverified. |
 | Artifact verification | PASS | Actual 1280x720 screenshot and 1024x576 PNG decode; hashes and provider request ID recorded. |
-| Documentation consistency | UPDATED | START_HERE/RUNBOOK now describe post-build work; original CODEX_BUILD_PROMPT marked historical. Plan, gates, sources, demo, and status align with native result 1.2 and unknown-cost limits. |
+| Documentation consistency | UPDATED | START_HERE/RUNBOOK now describe post-build work; original CODEX_BUILD_PROMPT marked historical. Plan, gates, sources, and status align with native result 1.2 and unknown-cost limits. |
 | Source delivery | REVIEWED | Exact allowlist/manifest and scan in docs/DELIVERY_REVIEW.json. Source remains untracked; nothing staged, committed, or pushed. Secrets, local state, build notes and presentation work excluded. |
 
 ## Fresh native runs
@@ -33,7 +33,7 @@ The pasted “build before / 0 of 9 complete” plan is historical. Most foundat
 | Browser inspection | c32e2814-8908-4760-8b42-8bb477fad560 | pi-browser:configured / openai-codex/gpt-5.5 | Schema 1.2; navigation, title/URL, screenshot, palette/typography/layout passed. |
 | Image from observations | a99494de-75e5-49c3-9e64-6a191728cc14 | fal-creative:image-quality / fal-ai/flux-2 | Schema 1.2; request ID, 16:9 artifact, and planner provenance passed; similarity unverified. |
 
-Evidence: `demo/native-mcp-verification.json`, `finalP0Verification`. Artifacts are local under ignored `artifacts/<runId>/`. Both calls were issued by this current Codex chat; no nested Codex was launched to provide this evidence.
+Artifacts for these runs are local under ignored `artifacts/<runId>/`. Both calls were issued by this current Codex chat; no nested Codex was launched to provide this evidence.
 
 The browser had one eligible route and selected it deterministically, `decisionStatus: not_required`; it made no Decisions request. Pi reported 4,525 input and 230 output tokens. The image Decision reported 300 input tokens and selected FLUX.2. Rate-estimated image+Decision fees are $0.01203. Pi OAuth per-task USD, host Codex usage, and provider invoices are unknown; do not describe that fee subtotal as full workflow cost. Latest session ledger has $4.768 remaining of the approved $5 cap. Router processing sum was 26.535 seconds; host preparation and user-prompt-to-answer time are not included.
 
@@ -60,7 +60,7 @@ The browser had one eligible route and selected it deterministically, `decisionS
 2. Run matched, repeated, order-balanced comparisons where more than one route is genuinely eligible. Record task/prompt hash, seed, parameters, route, execution/verification, queue conditions, usage, and cost source. Stop ambiguous paid work and reconcile before any retry.
 3. Grade image outputs with the documented human rubric, preferably blind to the generating arm. Report sample size and limits. Do not infer quality from a valid MIME or dimensions.
 4. Report success, failure, ungraded cases, latency, abstention/recovery, and partial known/estimated/unknown costs across all attempts. Do not add handoff time twice; it is already inside execution time. No comparative improvement claim until evidence supports it.
-5. Review source delivery manifest before an explicitly requested commit or push. Keep local artifacts available for the demo without staging all generated output.
+5. Review the source delivery manifest before an explicitly requested commit or push. Keep local artifacts out of the commit unless they are intentionally shared.
 
 ## P2: expand when justified
 
@@ -73,7 +73,7 @@ Later working-tree metering refinements were validated locally (92 tests passed,
 - Product boundary: `AGENTS.md` and `docs/PRODUCT_SPEC.md`.
 - Current status/backlog: this document.
 - Chronological evidence: `docs/BUILD_LOG.md`; historical entries remain historical.
-- Current native proof: `demo/native-mcp-verification.json`, `finalP0Verification`.
+- Current native proof: the run IDs in this document, with local artifacts under `artifacts/<runId>/`.
 - Operator workflow: `README.md`, `START_HERE.md`, `docs/RUNBOOK.md`.
 - Contract: task v1.0; current result v1.2 with legacy v1.1 read compatibility.
 - Delivery boundary: `docs/DELIVERY_ALLOWLIST.md` and `docs/DELIVERY_REVIEW.json`.

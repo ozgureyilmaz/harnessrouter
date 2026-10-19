@@ -1,6 +1,6 @@
 # Validation gates & acceptance matrix
 
-Do not imply a gate passed unless its evidence exists. Latest local checks and fresh native calls are recorded in `docs/BUILD_LOG.md` and `demo/native-mcp-verification.json`. G4/G5 now pass for the supported mechanical criteria: the final browser/image pair returned schema 1.2 with usage/cost fields, and native get_run matched persisted results. Image similarity is explicitly unverified.
+Do not imply a gate passed unless its evidence exists. G4/G5 passed for the supported mechanical criteria on the recorded browser/image pair: schema 1.2 with usage/cost fields, and native get_run matched persisted results. Image similarity is explicitly unverified.
 
 | Gate | Must prove | Negative path | Evidence |
 |---|---|---|---|
@@ -10,7 +10,7 @@ Do not imply a gate passed unless its evidence exists. Latest local checks and f
 | G3 | Pi independently performs browser task and screenshot | Pi crash, malformed JSONL, tool unavailable, dangerous URL | Pi RPC trace and verified screenshot path |
 | G4 | Current Codex calls native MCP `route_task` and receives one fresh typed result | Disconnected MCP, stale process, unrecognized route | fresh run ID, schema 1.2 result with `usage`/`costComponents`, artifact and trace; cached replay proves retrieval only |
 | G5 | Current Codex makes two fresh MCP calls for one objective; the second consumes observations from the first | Missing prior artifact, stale criterion evaluator, tool refusal | two fresh run IDs, parent link/fingerprint, two verified artifacts, current criterion results, metering fields and traces |
-| G6 | Repeatable demo without leaking secrets; README instructions run | provider downtime/replay confusion | measured log and clearly labeled recorded fallback |
+| G6 | README setup runs without leaking secrets | provider downtime/replay confusion | local check log |
 
 ## Test plan
 
