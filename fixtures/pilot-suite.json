@@ -41,7 +41,8 @@
             "desiredOutput": "screenshot",
             "maxCostUsd": 0.25,
             "timeoutMs": 120000,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expectedFacts": [
             "Product name: Northstar Notes",
@@ -95,7 +96,8 @@
             "desiredOutput": "screenshot",
             "maxCostUsd": 0.25,
             "timeoutMs": 120000,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expectedFacts": [
             "Title: Atlas Project Board",
@@ -149,7 +151,8 @@
             "desiredOutput": "screenshot",
             "maxCostUsd": 0.25,
             "timeoutMs": 120000,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expectedFacts": [
             "Title: Field Guide Archive",
@@ -203,7 +206,8 @@
             "desiredOutput": "screenshot",
             "maxCostUsd": 0.25,
             "timeoutMs": 120000,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expectedFacts": [
             "Title: Cedar Reference Desk",
@@ -257,7 +261,8 @@
             "desiredOutput": "screenshot",
             "maxCostUsd": 0.25,
             "timeoutMs": 120000,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expectedFacts": [
             "Title: Example Domain",
@@ -310,7 +315,8 @@
             "desiredOutput": "screenshot",
             "maxCostUsd": 0.25,
             "timeoutMs": 120000,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expectedFacts": [
             "The page concerns special-use domain names",
@@ -675,7 +681,8 @@
             "desiredOutput": "screenshot",
             "maxCostUsd": 0.25,
             "timeoutMs": 120000,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expectedFacts": [
             "Title: Atlas Project Board",
@@ -772,7 +779,8 @@
             "desiredOutput": "screenshot",
             "maxCostUsd": 0.25,
             "timeoutMs": 120000,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expectedFacts": [
             "Title: Example Domain",

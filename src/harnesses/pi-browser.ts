@@ -4,6 +4,7 @@ import { access, mkdir, readFile, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { HarnessAdapter, HarnessTask, ExecutionContext, AdapterResult, Health, UsageRecord, TraceSink } from '../domain/types.js';
+import { sanitizeMeasuredLinks, type MeasuredLink } from '../browser/measured-links.js';
 import { PROJECT_ROOT } from '../config.js';
 import { verifyImage } from '../observability/artifacts.js';
 import { PiRpcClient, PiRpcError, type PiRpcRecord } from '../transport/pi-rpc.js';
@@ -153,6 +154,7 @@ interface WebsiteObservationSidecar {
     };
     layout: { mainContentBox: { x: number; y: number; width: number; height: number } | null };
   };
+  links?: MeasuredLink[];
   screenshotPath: string;
 }
 
@@ -186,6 +188,13 @@ function validateObservation(value: unknown, runId: string): WebsiteObservationS
       !isBoundedString(style.typography?.bodyLineHeight, 40) || !isBoundedString(style.typography?.headingFontFamily, 200, true) ||
       !isBoundedString(style.typography?.headingFontSize, 40, true) || !isBoundedString(style.typography?.headingFontWeight, 40, true)) {
     throw new Error('Browser observation sidecar failed validation.');
+  }
+  if (observation.links !== undefined) {
+    const links = sanitizeMeasuredLinks(observation.links);
+    if (!Array.isArray(observation.links) || links.length !== observation.links.length) {
+      throw new Error('Browser observation links failed validation.');
+    }
+    observation.links = links;
   }
   const box = style.layout?.mainContentBox;
   if (box && (![box.x, box.y, box.width, box.height].every(Number.isFinite) ||
@@ -394,6 +403,7 @@ export class PiBrowserHarness implements HarnessAdapter {
             pageTitle: sidecar.pageTitle,
             agentSummary: summary.slice(0, 800),
             visualStyle: sidecar.visualStyle,
+            ...(sidecar.links ? {links: sidecar.links} : {}),
             screenshotPath,
           },
           providerReportedUsage: usage.tokens,
@@ -543,6 +553,7 @@ export class PiBrowserHarness implements HarnessAdapter {
       'Acceptance criteria:', acceptance,
       screenshotRequired ? 'Capture exactly one screenshot with browser_screenshot after inspection.' : 'Capture a screenshot only if it materially supports the requested result.',
       'Return a concise summary and distinguish observations from uncertainty. Do not reproduce long page passages.',
+      'browser_extract records exact link text and href. If you mention a link, copy that href. Do not guess or omit a measured target.',
     ].join('\n\n');
   }
 

@@ -3,10 +3,16 @@ import {validateRegistry, validateTask} from '../domain/schemas.js';
 import {RouterError} from '../domain/errors.js';
 import {DECISION_RESERVE_USD} from '../routing/decisions.js';
 import {validateSupportedRegistry} from './loader.js';
+import type {WorkerProfile} from '../workers/types.js';
 import type {HarnessManifest, HarnessTask, Health, Registry, Route} from '../domain/types.js';
 
 export interface EligibilityPolicy {
   allowPaid: boolean;
+  selector?: 'local'|'decisions';
+  decisionRequiresPaid?: boolean;
+  decisionReservationUsd?: number;
+  workerProfiles?: readonly WorkerProfile[];
+  allowExecution?: boolean;
   dryRun: boolean;
   allowedDomains: string[];
   remainingBudgetUsd: number;
@@ -30,7 +36,7 @@ const BLOCKED_REQUIREMENTS = new Set([
 ]);
 
 const VIDEO_REQUIREMENT = /video/i;
-const NATIVE_CONTROL_FALLBACK_DESCRIPTION = 'Control fallback: return the task to the current Codex host only when specialist delegation is unsuitable; this route does not perform browser or media execution.';
+const NATIVE_CONTROL_FALLBACK_DESCRIPTION = 'Control fallback: return the task to the current host only when specialist delegation is unsuitable; this route does not perform browser or media execution.';
 const PRIVATE_ACCOUNT_PROMPT = /\b(?:my|private|personal)\s+(?:(?:bank|financial|trading|brokerage|crypto|investment|email|social)\s+)?account\b|\b(?:log\s*in|login|sign\s*in)\b.{0,80}\b(?:my|private|personal|bank|account)\b|\b(?:transfer|withdraw|deposit|send|move|trade|purchase|buy|sell)\b.{0,80}\b(?:from|to|through|using|with)\s+(?:my|the)\s+(?:(?:bank|financial|investment|crypto|trading)\s+)?account\b/i;
 
 const MODALITY_REQUIREMENTS: Record<string, string[]> = {
@@ -56,9 +62,19 @@ export function getEligibleRoutes(
   health: Record<string, Health>,
   policy: EligibilityPolicy,
 ): EligibilityResult {
+  return admitDecisionSelection(task, getExecutableRoutes(task, registry, health, policy), policy);
+}
+
+/** Execution authorization is independent of whether a subsequent choice incurs a fee. */
+export function getExecutableRoutes(
+  task: HarnessTask,
+  registry: Registry,
+  health: Record<string, Health>,
+  policy: EligibilityPolicy,
+): EligibilityResult {
   validateTask(task);
   validateRegistry(registry);
-  validateSupportedRegistry(registry);
+  validateSupportedRegistry(registry, policy.workerProfiles);
   validatePolicy(policy);
 
   const eligible: EligibleRoute[] = [];
@@ -77,9 +93,6 @@ export function getEligibleRoutes(
   else if (videoTask) taskWideBlock = 'video_disabled';
   else if (unknownRequirements.length) taskWideBlock = `unknown_requirement:${unknownRequirements[0]}`;
   else if (requirements.length === 0) taskWideBlock = 'requirements_missing';
-  else if (Math.min(task.maxCostUsd ?? Number.POSITIVE_INFINITY, policy.remainingBudgetUsd) < DECISION_RESERVE_USD) {
-    taskWideBlock = 'budget_below_decision_reserve';
-  }
 
   for (const harness of registry.harnesses) {
     for (const route of harness.routes) {
@@ -96,10 +109,15 @@ export function getEligibleRoutes(
         fail('route_disabled');
         continue;
       }
-      if (!policy.allowPaid && harness.kind !== 'host_defer') {
-        fail('decision_paid_call_not_authorized');
-        continue;
+
+      const worker = policy.workerProfiles?.find(profile => profile.id === harness.id);
+      if (worker) {
+        if(!worker.enabled || !worker.allowExecution || policy.allowExecution !== true){fail('worker_execution_not_authorized');continue;}
+        if(!task.workspace){fail('workspace_required');continue;}
+        if(task.desiredOutput==='patch' && task.workspace.mode!=='patch'){fail('workspace_write_not_authorized');continue;}
+        if(!worker.allowUnknownCost || task.allowUnknownCost!==true){fail('unknown_cost_not_authorized');continue;}
       }
+      if(task.preferredRouteId && task.preferredRouteId!==route.id){fail('route_not_requested');continue;}
 
       const routeRequirements = new Set(route.eligible_requirements.map(normalizeRequirement));
       const unmetRequirement = requirements.find(requirement => !routeRequirements.has(requirement));
@@ -176,7 +194,8 @@ export function getEligibleRoutes(
         continue;
       }
 
-      const priceFailure = checkPriceAndBudget(route, task, policy, {paidRoute, piOAuthNotApplicable});
+      if(harness.id==='pi-browser'&&(policy.allowExecution!==true||task.allowUnknownCost!==true)){fail('unknown_cost_execution_not_authorized');continue;}
+      const priceFailure = worker ? undefined : checkPriceAndBudget(route, task, policy, {paidRoute, piOAuthNotApplicable});
       if (priceFailure) {
         fail(priceFailure);
         continue;
@@ -201,7 +220,7 @@ function addNativeControlFallback(
   eligible: EligibleRoute[],
   excluded: EligibilityResult['excluded'],
 ): void {
-  if (taskWideBlock || policy.dryRun || !policy.allowPaid) return;
+  if (taskWideBlock || policy.dryRun || policy.selector !== 'decisions' || task.preferredRouteId) return;
   if (!eligible.some(candidate => candidate.harness.kind !== 'host_defer')) return;
 
   const native = registry.harnesses.find(harness => harness.id === 'native');
@@ -212,7 +231,6 @@ function addNativeControlFallback(
   const fallbackRequirements = new Set((route.fallback_requirements ?? []).map(normalizeRequirement));
   if (requirements.length === 0 || requirements.some(requirement => !fallbackRequirements.has(requirement))) return;
   if (route.price_status !== 'not_applicable' || route.price_usd != null) return;
-  if (Math.min(task.maxCostUsd ?? Number.POSITIVE_INFINITY, policy.remainingBudgetUsd) < DECISION_RESERVE_USD) return;
 
   const healthRecords = [health[native.id], health[route.id]].filter((entry): entry is Health => entry !== undefined);
   if (healthRecords.length === 0 || healthRecords.some(entry => !entry.available)) return;
@@ -289,7 +307,7 @@ function checkPriceAndBudget(
   }
 
   const hasHardBudget = task.maxCostUsd !== undefined || Number.isFinite(policy.remainingBudgetUsd);
-  const cap = Math.min(task.maxCostUsd ?? Number.POSITIVE_INFINITY, policy.remainingBudgetUsd) - DECISION_RESERVE_USD;
+  const cap = Math.min(task.maxCostUsd ?? Number.POSITIVE_INFINITY, policy.remainingBudgetUsd);
   if (route.price_status === 'unknown' || route.price_status === 'unverified' || route.price_usd === null || route.price_usd === undefined) {
     if (hasHardBudget) return 'price_unknown_under_budget';
     if (!policy.allowPaid || task.allowPaidExecution !== true) return 'paid_execution_not_authorized';
@@ -302,7 +320,33 @@ function checkPriceAndBudget(
   return undefined;
 }
 
+function requiresPaidSelection(policy:EligibilityPolicy,task:HarnessTask):boolean{return policy.selector==='decisions'&&policy.decisionRequiresPaid!==false&&!task.preferredRouteId;}
+function decisionReserve(policy:EligibilityPolicy,task:HarnessTask):number{return requiresPaidSelection(policy,task)?policy.decisionReservationUsd??DECISION_RESERVE_USD:0;}
+
+/** Apply hosted-selection authorization only after executable candidates and explicit pins are known. */
+export function admitDecisionSelection(task:HarnessTask,candidates:EligibilityResult,policy:EligibilityPolicy):EligibilityResult {
+  validatePolicy(policy);
+  if(candidates.eligible.length<=1||!requiresPaidSelection(policy,task))return candidates;
+  const reserve=decisionReserve(policy,task);
+  const cap=Math.min(task.maxCostUsd??Number.POSITIVE_INFINITY,policy.remainingBudgetUsd);
+  const excluded=[...candidates.excluded];
+  const eligible=candidates.eligible.filter(candidate=>{
+    if(candidate.harness.kind==='host_defer')return true;
+    const reason=!policy.allowPaid?'decision_paid_call_not_authorized':cap<reserve?'budget_below_decision_reserve':typeof candidate.route.price_usd==='number'&&candidate.route.price_usd>cap-reserve?'budget_exceeded':undefined;
+    if(reason){excluded.push({id:candidate.route.id,reason});return false;}
+    return true;
+  });
+  // A control fallback never turns a rejected specialist task into an eligible host execution.
+  if(!eligible.some(candidate=>candidate.harness.kind!=='host_defer')&&!task.requirements.some(requirement=>['coding','host_owned_tasks'].includes(normalizeRequirement(requirement)))){
+    for(let index=eligible.length-1;index>=0;index--)if(eligible[index].harness.kind==='host_defer'){
+      excluded.push({id:eligible[index].route.id,reason:'no_eligible_specialist_for_control_fallback'});eligible.splice(index,1);
+    }
+  }
+  return {eligible,excluded};
+}
+
 function validatePolicy(policy: EligibilityPolicy): void {
+  if(policy.decisionRequiresPaid!==undefined&&typeof policy.decisionRequiresPaid!=='boolean'||policy.decisionReservationUsd!==undefined&&(!Number.isFinite(policy.decisionReservationUsd)||policy.decisionReservationUsd<0))throw new RouterError('invalid_policy','Decision provider policy is malformed');
   if (!Number.isFinite(policy.remainingBudgetUsd) || policy.remainingBudgetUsd < 0) {
     throw new RouterError('invalid_policy', 'Remaining task budget must be finite and nonnegative');
   }

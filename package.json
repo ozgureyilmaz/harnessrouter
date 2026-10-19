@@ -2,8 +2,7 @@
   "name": "harnessrouter",
   "version": "1.0.0",
   "description": "Task-aware MCP gateway for independently verified agent harness execution",
-  "private": true,
-  "main": "dist/index.js",
+  "main": "dist/api.js",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "test": "tsx --test tests/unit/*.test.ts tests/integration/*.test.ts",
@@ -21,24 +20,34 @@
     "eval:live": "tsx scripts/eval.ts",
     "eval:harnesses": "tsx scripts/evaluate-harnesses.ts",
     "benchmark": "tsx scripts/benchmark.ts",
-    "eval:pilot": "tsx scripts/evaluate-pilot.ts"
+    "domain:allow": "tsx scripts/allow-domain.ts",
+    "task:compose": "tsx scripts/compose-image-task.ts",
+    "eval:pilot": "tsx scripts/evaluate-pilot.ts",
+    "package:check": "node scripts/package-check.mjs",
+    "prepack": "npm run build",
+    "check": "npm run typecheck && npm test && npm run build && npm run package:check",
+    "package:smoke": "node scripts/package-smoke.mjs"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "mcp",
+    "agents",
+    "harness",
+    "codex",
+    "claude-code",
+    "opencode",
+    "pi"
+  ],
+  "author": "\u00d6zg\u00fcr Ery\u0131lmaz",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22.19.0"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "1.1.0",
-    "@fal-ai/client": "1.10.1",
     "@modelcontextprotocol/sdk": "1.32.1",
     "ajv": "8.20.0",
     "dotenv": "18.0.7",
     "openai": "7.32.0",
-    "playwright": "1.64.0",
-    "sharp": "0.35.5",
     "typebox": "1.3.27",
     "yaml": "2.9.1",
     "zod": "4.6.6"
@@ -48,6 +57,9 @@
       "@opentelemetry/exporter-trace-otlp-proto": {
         "protobufjs": "8.8.1"
       }
+    },
+    "@opentelemetry/otlp-transformer@0.211.0": {
+      "protobufjs": "8.8.1"
     }
   },
   "devDependencies": {
@@ -56,5 +68,38 @@
     "deepeval": "0.9.22",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
+  },
+  "types": "dist/api.d.ts",
+  "bin": {
+    "harnessrouter": "dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    },
+    "./contracts/*": "./contracts/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "contracts/",
+    "config/harness-registry.yaml",
+    "config/.env.example",
+    "docs/",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ozgureyilmaz/harnessrouter.git"
+  },
+  "optionalDependencies": {
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@fal-ai/client": "1.10.1",
+    "playwright": "1.64.0",
+    "sharp": "0.35.5"
   }
 }

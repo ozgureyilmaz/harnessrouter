@@ -14,6 +14,7 @@ const taskTemplate = z.object({
   maxCostUsd:z.number().positive().optional(),
   timeoutMs:z.number().int().positive().optional(),
   allowPaidExecution:z.boolean().optional(),
+  allowUnknownCost:z.boolean().optional(),
 }).strict();
 const expected = z.object({status,selectedHarnessId:z.string().min(1).nullable().optional()}).strict();
 const check = z.discriminatedUnion('type',[
@@ -69,7 +70,7 @@ export function evaluateOfflineEligibility(set:EvaluationSet,registry:Registry,h
   const rows:Array<{caseId:string;stepId:string;path:EvaluationPath;passed:boolean;expectedHarnessId:string|null;eligibleHarnessIds:string[];failure?:string}> = [];
   for(const item of set.cases)for(const current of item.steps){
     const task={schemaVersion:'1.0' as const,taskId:`offline-${item.id}-${current.id}`, ...current.task};
-    const eligibility=getEligibleRoutes(task,registry,health,{allowPaid:true,dryRun:false,remainingBudgetUsd:5,allowedDomains:['example.com'],credentials:{openai:true,fal:true}});
+    const eligibility=getEligibleRoutes(task,registry,health,{selector:'decisions',allowPaid:true,allowExecution:true,dryRun:false,remainingBudgetUsd:5,allowedDomains:['example.com'],credentials:{openai:true,fal:true}});
     const eligibleHarnessIds=[...new Set(eligibility.eligible.map(route=>route.harness.id))];
     for(const path of ['direct','router'] as const){
       const expected=current.expected[path];if(!expected)continue;

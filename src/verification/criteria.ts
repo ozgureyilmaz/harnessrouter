@@ -16,6 +16,16 @@ function evaluateCriterion(criterion: string, result: CriterionEvidence): Criter
   const observations=result.structuredOutput?.websiteObservations as Record<string,unknown>|undefined;
   const artifacts=result.artifacts;
 
+  if (/^patch applies to (?:the )?captured baseline\.?$/.test(lower)) {
+    const patch=artifacts.find(item=>item.type==='patch'&&item.verified&&item.path);
+    const metadata=result.structuredOutput?.patch as {sha256?:unknown;baselineFingerprint?:unknown}|undefined;
+    const passed=!!patch&&typeof metadata?.sha256==='string'&&typeof metadata.baselineFingerprint==='string';
+    return {criterion,status:passed?'passed':'failed',verifier:'artifact',...(passed?{evidence:patch!.path}: {})};
+  }
+  if (/^readable text answer\.?$/.test(lower)) {
+    const text=artifacts.find(item=>item.type==='text'&&item.verified&&item.path);
+    return {criterion,status:text?'passed':'failed',verifier:'artifact',...(text?{evidence:text.path}: {})};
+  }
   // Negated criteria need semantic evaluation that the deterministic verifier does not provide.
   if (/\b(?:not|never|without|avoid|no)\b/.test(lower)) return {criterion,status:'unverified',verifier:'none'};
 
@@ -30,6 +40,11 @@ function evaluateCriterion(criterion: string, result: CriterionEvidence): Criter
       criterion,status:typeof sourceUrl==='string'&&sourceUrl.length>0&&typeof calls==='number'&&calls>0?'passed':'failed',
       verifier:'browser_observation',...(typeof sourceUrl==='string'&&sourceUrl.length>0?{evidence:'structuredOutput.websiteObservations.sourceUrl'}:{}),
     };
+  }
+  if (/\b(?:exact link target|measured href|link href)\b/.test(lower)) {
+    const links=observations?.links;
+    const valid=Array.isArray(links)&&links.some(link=>isObject(link)&&typeof link.href==='string'&&link.href.startsWith('https://')&&typeof link.text==='string'&&link.text.length>0);
+    return {criterion,status:valid?'passed':'failed',verifier:'browser_observation',...(valid?{evidence:'structuredOutput.websiteObservations.links'}:{})};
   }
   if (/\b(?:observed title and final url|page title and final url)\b/.test(lower)) {
     const hasEvidence=typeof observations?.sourceUrl==='string'&&typeof observations.pageTitle==='string'&&observations.pageTitle.length>0;

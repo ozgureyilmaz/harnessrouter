@@ -48,6 +48,7 @@ function taskFor(step:EvaluationStep,taskId:string,capUsd:number,previous?:Harne
     ...(Object.keys(context).length?{context}:{}),...(step.task.allowedDomains?{allowedDomains:[...step.task.allowedDomains]}:{}),
     maxCostUsd:Math.min(step.task.maxCostUsd??capUsd,capUsd),...(step.task.timeoutMs?{timeoutMs:step.task.timeoutMs}:{}),
     allowPaidExecution:step.task.allowPaidExecution??false,...(step.inheritPreviousObservations&&previous?{parentRunId:previous.runId}:{}),
+    ...(step.task.allowUnknownCost===undefined?{}:{allowUnknownCost:step.task.allowUnknownCost}),
   };
 }
 
@@ -81,7 +82,8 @@ async function invokeDirect(options:{router:Awaited<ReturnType<typeof createRout
   const health=await adapter.health();if(!health.available)throw new Error(`Direct harness ${adapter.id} is unavailable: ${health.reason??'unknown reason'}`);
   const list=await router.listHarnesses();const registry=await loadRegistry(router.config.registryPath);
   const {getEligibleRoutes}=await import('../src/registry/eligibility.js');
-  const filtered=getEligibleRoutes(task,registry,{...list.health,[adapter.id]:health},{allowPaid:router.config.allowPaid,dryRun:router.config.dryRun,remainingBudgetUsd:Math.min(remainingUsd,router.ledger.remainingUsd),allowedDomains:router.config.allowedDomains,credentials:list.credentials});
+  if(adapter.id==='pi-browser'&&(!router.config.allowExecution||task.allowUnknownCost!==true))throw new Error('Direct Pi execution requires ROUTER_ALLOW_EXECUTION=true and task allowUnknownCost=true.');
+  const filtered=getEligibleRoutes(task,registry,{...list.health,[adapter.id]:health},{allowPaid:router.config.allowPaid,allowExecution:router.config.allowExecution,dryRun:router.config.dryRun,remainingBudgetUsd:Math.min(remainingUsd,router.ledger.remainingUsd),allowedDomains:router.config.allowedDomains,credentials:list.credentials});
   const candidate=filtered.eligible.find(item=>item.harness.id===adapter.id);
   if(!candidate)throw new Error(`Direct harness ${adapter.id} is not eligible for this case: ${filtered.excluded.map(item=>`${item.id}=${item.reason}`).join(', ')}`);
 

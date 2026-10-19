@@ -1,10 +1,4 @@
-import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
-import {createRouter} from './create-router.js';
-import {createMcpServer} from './mcp/tools.js';
-const router=await createRouter();const server=createMcpServer(router);
-let closed=false;
-async function close(){if(closed)return;closed=true;await router.close();await server.close();}
-process.on('SIGINT',()=>void close().then(()=>process.exit(0)));
-process.on('SIGTERM',()=>void close().then(()=>process.exit(0)));
-process.stdin.on('end',()=>void close());
-await server.connect(new StdioServerTransport());
+#!/usr/bin/env node
+import {runCli} from './cli.js';
+try{process.exitCode=await runCli(process.argv.slice(2));}
+catch(error){process.stderr.write(`harnessrouter: ${error instanceof Error?error.message:'startup failed'}\n`);process.exitCode=1;}

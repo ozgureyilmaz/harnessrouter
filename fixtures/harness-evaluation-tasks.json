@@ -31,7 +31,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -96,7 +97,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -161,7 +163,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -226,7 +229,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -291,7 +295,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -356,7 +361,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -1052,7 +1058,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "router": {
@@ -1211,7 +1218,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -1351,7 +1359,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -1491,7 +1500,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {
@@ -1631,7 +1641,8 @@
               "example.com"
             ],
             "maxCostUsd": 0.25,
-            "allowPaidExecution": true
+            "allowPaidExecution": true,
+            "allowUnknownCost": true
           },
           "expected": {
             "direct": {

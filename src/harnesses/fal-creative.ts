@@ -168,6 +168,10 @@ export class CreativeHarness implements HarnessAdapter {
     this.verifyImage = options.verifyImage ?? defaultVerifyImage;
   }
 
+  async preflight(task:HarnessTask,ctx:ExecutionContext):Promise<void>{
+    const plan=planCreativeTask(task,ctx);
+    if(!plan.ok)throw new RouterError(plan.code,plan.message);
+  }
   async health(): Promise<Health> {
     if (!this.apiKey) return {available: false, reason: 'FAL_KEY is missing', provider: 'fal'};
     if (!this.allowPaid) return {available: false, reason: 'paid fal execution has not been enabled', provider: 'fal'};

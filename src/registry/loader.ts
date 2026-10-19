@@ -4,13 +4,15 @@ import {parse as parseYaml} from 'yaml';
 import {validateRegistry} from '../domain/schemas.js';
 import {RouterError} from '../domain/errors.js';
 import type {Registry} from '../domain/types.js';
+import type {WorkerProfile} from '../workers/types.js';
+import {validateWorkerManifest} from '../workers/registry.js';
 
 const SAFE_NATIVE_FALLBACK_REQUIREMENTS = new Set([
   'browser', 'screenshot', 'public_site_research', 'image', 'text_to_image',
 ]);
 
 /** Load and validate a JSON/YAML harness registry from disk. */
-export async function loadRegistry(path: string): Promise<Registry> {
+export async function loadRegistry(path: string, profiles: readonly WorkerProfile[] = []): Promise<Registry> {
   let text: string;
   try {
     text = await readFile(path, 'utf8');
@@ -33,12 +35,12 @@ export async function loadRegistry(path: string): Promise<Registry> {
   }
 
   validateRegistry(value);
-  validateSupportedRegistry(value);
+  validateSupportedRegistry(value, profiles);
   return value;
 }
 
-/** Validate the deliberately closed MVP adapter surface before route filtering. */
-export function validateSupportedRegistry(registry: Registry): void {
+/** Validate configured bindings before route filtering; task input cannot register adapters. */
+export function validateSupportedRegistry(registry: Registry, profiles: readonly WorkerProfile[] = []): void {
   assertUniqueIds(registry);
   const bindings: Record<string, {kind: string; transport: string; routeModels: Record<string, string | null>}> = {
     'pi-browser': {
@@ -56,20 +58,22 @@ export function validateSupportedRegistry(registry: Registry): void {
   };
 
   for (const harness of registry.harnesses) {
+    const profile = profiles.find(profile => profile.id === harness.id);
+    if(profile){validateWorkerManifest(harness,profile);continue;}
     const binding = bindings[harness.id];
-    if (!binding) throw new RouterError('registry_unsupported', `Harness is outside the MVP adapter set: ${harness.id}`);
+    if (!binding) throw new RouterError('registry_unsupported', `Harness is outside the registered adapter set: ${harness.id}`);
     if (harness.kind !== binding.kind || harness.transport !== binding.transport) {
       throw new RouterError('registry_unsupported', `Harness kind or transport does not match the adapter: ${harness.id}`);
     }
     for (const route of harness.routes) {
       if (route.description.length > 500) {
-        throw new RouterError('registry_unsupported', `Route description exceeds the MVP limit: ${route.id}`);
+        throw new RouterError('registry_unsupported', `Route description exceeds the description limit: ${route.id}`);
       }
       if (!route.id.startsWith(`${harness.id}:`)) {
         throw new RouterError('registry_unsupported', `Route ID is not bound to its harness: ${route.id}`);
       }
       if (!Object.hasOwn(binding.routeModels, route.id)) {
-        throw new RouterError('registry_unsupported', `Route is outside the configured MVP profiles: ${route.id}`);
+        throw new RouterError('registry_unsupported', `Route is outside the configured profiles: ${route.id}`);
       }
       if (route.fallback_requirements !== undefined) {
         if (harness.id !== 'native') {

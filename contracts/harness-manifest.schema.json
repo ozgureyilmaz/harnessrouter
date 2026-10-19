@@ -42,7 +42,8 @@
             "enum": [
               "pi_rpc",
               "in_process",
-              "none"
+              "none",
+              "subprocess"
             ]
           },
           "enabled": {
@@ -110,7 +111,9 @@
                 "fallback_requirements": {
                   "description": "Only host_defer routes: safe requirements accepted as a control fallback alongside an eligible specialist. This does not declare executable host capabilities.",
                   "type": "array",
-                  "items": {"type": "string"},
+                  "items": {
+                    "type": "string"
+                  },
                   "uniqueItems": true
                 },
                 "price_usd": {

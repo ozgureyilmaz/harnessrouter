@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {PROJECT_ROOT} from '../../src/config.js';
 import {loadRegistry} from '../../src/registry/loader.js';
+import {getEligibleRoutes} from '../../src/registry/eligibility.js';
 import {evaluateOfflineEligibility,parseEvaluationSet,scoreStep,summarizeEvaluation} from '../../src/evaluation/evaluator.js';
 import type {HarnessResult} from '../../src/domain/types.js';
 
@@ -19,6 +20,7 @@ test('evaluation fixture has 24 valid synthetic cases covering each required cat
   for(const item of set.cases)for(const step of item.steps){
     assert.ok(step.task.requiredCapabilities.length>0,`${item.id} has capabilities`);
     assert.ok(step.task.acceptanceCriteria.length>0,`${item.id} has acceptance criteria`);
+    if(step.task.requirements.includes('browser'))assert.equal(step.task.allowUnknownCost,true,`${item.id}/${step.id} explicitly consents to unknown-cost Pi eligibility`);
     assert.ok(step.checks.router.length>0||step.expected.router.status==='defer_to_host',`${item.id} has router checks`);
   }
 });
@@ -41,6 +43,13 @@ test('offline evaluation checks expected eligible routes without provider calls'
   assert.equal(report.failed,0);
   assert.ok(report.results.some(row=>row.path==='direct'));
   assert.ok(report.results.some(row=>row.path==='router'));
+});
+
+test('local Ollaya selection does not require hosted decision payment authorization',async()=>{
+  const registry=await loadRegistry(join(PROJECT_ROOT,'config/harness-registry.yaml'));
+  const task=set.cases.find(item=>item.id==='B-01')!.steps[0]!.task;
+  const eligibility=getEligibleRoutes({...task,schemaVersion:'1.0',taskId:'ollaya-offline-regression'},registry,{'pi-browser':{available:true,provider:'openai-codex'},'fal-creative':{available:true},native:{available:true}},{selector:'decisions',decisionRequiresPaid:false,decisionReservationUsd:0,allowPaid:false,allowExecution:true,dryRun:false,remainingBudgetUsd:.25,allowedDomains:['example.com'],credentials:{openai:true,fal:true}});
+  assert.ok(eligibility.eligible.some(route=>route.route.id==='pi-browser:configured'));
 });
 
 test('direct and router checks independently require verified artifacts and route outcomes',()=>{

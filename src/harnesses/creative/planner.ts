@@ -47,6 +47,10 @@ const websiteObservationsSchema = z.object({
     layout: z.object({mainContentBox: rectSchema.nullable()}).strict(),
   }).strict(),
   screenshotPath: z.string().max(2_048),
+  links: z.array(z.object({
+    text: z.string().min(1).max(200),
+    href: z.string().url().max(2_048),
+  }).strict()).max(8).optional(),
 }).strict();
 
 const STYLE_TOKENS = new Set([

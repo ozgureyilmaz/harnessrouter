@@ -46,7 +46,9 @@ const health: Record<string, Health> = {
 };
 
 const basePolicy = {
+  selector:'decisions' as const,
   allowPaid: true,
+  allowExecution: true,
   dryRun: false,
   allowedDomains: ['example.com'],
   remainingBudgetUsd: 1,
@@ -74,6 +76,7 @@ test('eligibility requires health and exact route capability coverage', () => {
     desiredOutput: 'text',
     prompt: 'Inspect https://example.com and take a screenshot.',
     allowedDomains: ['example.com'],
+    allowUnknownCost: true,
   });
   const result = getEligibleRoutes(browserTask, registry, {
     'pi-browser': {available: true, provider: 'openai-codex'}, native: health.native!,
@@ -87,6 +90,35 @@ test('eligibility requires health and exact route capability coverage', () => {
   const missingHealth = getEligibleRoutes(browserTask, registry, {}, basePolicy);
   assert.deepEqual(missingHealth.eligible, []);
   assert.equal(missingHealth.excluded.find(item => item.id === 'pi-browser:configured')?.reason, 'health_not_checked');
+});
+
+test('Pi execution and unknown-cost authorization are independent of the selector and provider', () => {
+  const browserTask = task({
+    requirements: ['browser'], desiredOutput: 'text',
+    prompt: 'Inspect https://example.com.', allowedDomains: ['example.com'],
+    allowUnknownCost: true,
+  });
+  const modes = [
+    {name: 'OpenAI hosted selector', selector: 'decisions' as const, decisionRequiresPaid: true, allowPaid: true},
+    {name: 'Jev hosted selector', selector: 'decisions' as const, decisionRequiresPaid: true, allowPaid: true},
+    {name: 'Ollaya local provider', selector: 'decisions' as const, decisionRequiresPaid: false, allowPaid: false},
+    {name: 'local route ranking', selector: 'local' as const, decisionRequiresPaid: true, allowPaid: false},
+  ];
+  for (const mode of modes) {
+    const policy = {...basePolicy, ...mode};
+    const authorized = getEligibleRoutes(browserTask, registry, health, policy);
+    assert.equal(authorized.eligible.some(item => item.harness.id === 'pi-browser'), true, mode.name);
+    for (const allowExecution of [false, undefined]) {
+      const denied = getEligibleRoutes(browserTask, registry, health, {...policy, allowExecution});
+      assert.equal(denied.eligible.some(item => item.harness.id === 'pi-browser'), false, mode.name);
+      assert.equal(denied.excluded.find(item => item.id === 'pi-browser:configured')?.reason, 'unknown_cost_execution_not_authorized');
+    }
+    for (const allowUnknownCost of [false, undefined]) {
+      const denied = getEligibleRoutes({...browserTask, allowUnknownCost}, registry, health, policy);
+      assert.equal(denied.eligible.some(item => item.harness.id === 'pi-browser'), false, mode.name);
+      assert.equal(denied.excluded.find(item => item.id === 'pi-browser:configured')?.reason, 'unknown_cost_execution_not_authorized');
+    }
+  }
 });
 
 test('eligibility excludes routes that lack any explicitly required execution capability', () => {
@@ -107,6 +139,7 @@ test('eligibility excludes external routes when paid Decisions selection is not 
   const browserTask = task({
     requirements: ['browser', 'screenshot'], desiredOutput: 'screenshot',
     prompt: 'Inspect https://example.com and capture a screenshot.', allowedDomains: ['example.com'],
+    allowUnknownCost: true,
   });
   const result = getEligibleRoutes(browserTask, registry, health, {...basePolicy, allowPaid: false});
   assert.deepEqual(result.eligible, []);

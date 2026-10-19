@@ -2,31 +2,49 @@ import {randomUUID,createHash} from 'node:crypto';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {performance} from 'node:perf_hooks';
-import type {HarnessAdapter,HarnessTask,HarnessResult,DecisionTrace,Health,UsageRecord,CostComponent} from './domain/types.js';
+import type {HarnessAdapter,HarnessTask,HarnessResult,DecisionTrace,Health,UsageRecord,CostComponent,Registry} from './domain/types.js';
 import {RouterError,checkAbort} from './domain/errors.js';
 import {validateTask,validateResult,validateTrace} from './domain/schemas.js';
 import type {RouterConfig} from './config.js';
 import {loadRegistry} from './registry/loader.js';
-import {getEligibleRoutes} from './registry/eligibility.js';
-import {DecisionsClient} from './routing/decisions.js';
+import {getExecutableRoutes,admitDecisionSelection} from './registry/eligibility.js';
+import {createDecisionSelector} from './routing/decision-factory.js';
+import type {DecisionSelector} from './routing/decision-provider.js';
 import {RunTrace,taskFingerprint,redact} from './observability/trace.js';
 import {BudgetLedger} from './observability/budget.js';
 import {assertArtifactPath,verifyImage,validatePublicUrl} from './observability/artifacts.js';
-import {planCreativeTask} from './harnesses/creative/planner.js';
 import {evaluateCriteria,unverifiedCriteria} from './verification/criteria.js';
 import {normalizeUsageRecord} from './observability/metering.js';
+import {applyStaticImageRoute} from './routing/image-route.js';
+import {workerManifests} from './workers/registry.js';
+import {selectLocal} from './routing/local.js';
 export class HarnessRouter {
   private active=new Map<string,AbortController>();
   private pending=new Map<string,Promise<HarnessResult>>();
-  constructor(readonly config:RouterConfig,readonly adapters:HarnessAdapter[],readonly ledger:BudgetLedger,private decisions=new DecisionsClient({apiKey:config.apiKey,model:config.decisionModel,timeoutMs:config.decisionTimeoutMs,allowPaid:config.allowPaid,dryRun:config.dryRun})) {}
-  async health():Promise<Record<string,Health>> {
+  constructor(readonly config:RouterConfig,readonly adapters:HarnessAdapter[],readonly ledger:BudgetLedger,private decisions:DecisionSelector=createDecisionSelector(config)) {}
+  private get decisionProvider(){return this.decisions.provider??this.config.decisionProvider??'openai';}
+  private get decisionPaid(){return this.decisions.requiresPaid??this.decisionProvider!=='ollaya';}
+  private get decisionReserve(){return this.decisionPaid?(this.decisions.reservationUsd??this.config.decisionReserveUsd??.01):0;}
+  async health(options: {ids?: ReadonlySet<string>; signal?: AbortSignal}={}):Promise<Record<string,Health>> {
     const result:Record<string,Health>={native:{available:true}};
-    await Promise.all(this.adapters.map(async adapter=>{
-      try{result[adapter.id]=await adapter.health();}
-      catch{result[adapter.id]={available:false,reason:'health_check_failed'};}
+    await Promise.all(this.adapters.filter(adapter=>!options.ids||options.ids.has(adapter.id)).map(async adapter=>{
+      try{result[adapter.id]=await abortable(adapter.health({signal:options.signal}),options.signal);}
+      catch{options.signal?.throwIfAborted();result[adapter.id]={available:false,reason:'health_check_failed'};}
     }));return result;
   }
-  async listHarnesses(){return {registry:await loadRegistry(this.config.registryPath),health:await this.health(),policy:{dryRun:this.config.dryRun,allowPaid:this.config.allowPaid,remainingBudgetUsd:this.ledger.remainingUsd,allowedDomains:this.config.allowedDomains},credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};}
+  private async registry(){
+    const registry=await loadRegistry(this.config.registryPath,this.config.workerProfiles);
+    const ids=new Set(registry.harnesses.map(h=>h.id));
+    registry.harnesses.push(...workerManifests(this.config.workerProfiles??[]).filter(h=>!ids.has(h.id)));
+    return registry;
+  }
+  async listHarnesses(options: {includePerformance?: boolean}={}){
+    const result={decisionLayer:{enabled:(this.config.selector??'decisions')==='decisions',provider:this.decisionProvider,model:this.config.decisionModel,requiresPaid:this.decisionPaid,reservationUsd:this.decisionReserve,credentialConfigured:this.decisionProvider==='openai'?!!this.config.apiKey:this.decisionProvider==='jev'?!!this.config.jevApiKey:true,...(this.decisionProvider==='ollaya'?{baseUrl:this.config.ollayaBaseUrl}: {})},registry:await this.registry(),health:await this.health(),policy:{selector:this.config.selector??'decisions',dryRun:this.config.dryRun,allowExecution:this.config.allowExecution??false,allowPaid:this.config.allowPaid,remainingBudgetUsd:this.ledger.remainingUsd,allowedDomains:this.config.allowedDomains},credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
+    if(!options.includePerformance)return result;
+    const {readPerformanceReport}=await import('./observability/performance.js');
+    return {...result,performance:await readPerformanceReport(this.config.artifactsDir,{limit:250})};
+  }
+
   routeTask(input:unknown,hostSignal?:AbortSignal):Promise<HarnessResult> {
     validateTask(input);
     const key=createHash('sha256').update(input.taskId).digest('hex');
@@ -44,7 +62,7 @@ export class HarnessRouter {
   private async execute(task:HarnessTask,key:string,hostSignal?:AbortSignal):Promise<HarnessResult> {
     const runId=randomUUID();const trace=new RunTrace(this.config.artifactsDir,runId);
     const controller=new AbortController();const signal=controller.signal;
-    const configuredTimeout=task.requirements.some(r=>['browser','screenshot','public_site_research'].includes(r))?this.config.piTaskTimeoutMs:this.config.falTaskTimeoutMs;
+    const configuredTimeout=task.workspace?300000:task.requirements.some(r=>['browser','screenshot','public_site_research'].includes(r))?this.config.piTaskTimeoutMs:this.config.falTaskTimeoutMs;
     const timeout=Math.min(task.timeoutMs??configuredTimeout,configuredTimeout,300000);
     const timer=setTimeout(()=>controller.abort(new RouterError('timeout','Task timed out')),timeout);
     const abort=()=>controller.abort(hostSignal?.reason);hostSignal?.addEventListener('abort',abort,{once:true});
@@ -58,17 +76,19 @@ export class HarnessRouter {
       if(['decision.completed','decision.invalid_response','decision.refused','decision.failed'].includes(type)) {
         decisionMeteringObserved=true;
         const eventData=isRecord(data)?data:{};
-        const usage={...normalizeUsageRecord({provider:'openai',model:typeof eventData.model==='string'?eventData.model:this.config.decisionModel,source:'decisions_api',measurement:isRecord(eventData.usage)?'provider_reported':'unavailable',counters:eventData.usage,details:isRecord(eventData.usage)?undefined:'The Decisions response did not provide token usage.'}),evidenceRef:`events.jsonl:${type}`};
+        const provider=typeof eventData.provider==='string'?eventData.provider:this.decisionProvider;
+        const usageSource=provider==='openai'?'decisions_api':`${provider}_decisions.canonical_v1`;
+        const usage={...normalizeUsageRecord({provider,model:typeof eventData.model==='string'?eventData.model:this.config.decisionModel,source:usageSource,measurement:isRecord(eventData.usage)?'provider_reported':'unavailable',counters:eventData.usage,details:isRecord(eventData.usage)?undefined:'The Decisions response did not provide token usage.'}),evidenceRef:`events.jsonl:${type}`};
         usageRecords.push(usage);
         const providerCost=isRecord(eventData.cost)?eventData.cost:{};
         const status=providerCost.status==='estimated'?'rate_estimate':providerCost.status==='known'?'provider_reported':'unknown';
-        costComponents.push({provider:'openai',model:typeof eventData.model==='string'?eventData.model:this.config.decisionModel,source:'OpenAI Decisions API',status,...(typeof providerCost.usd==='number'?{usd:providerCost.usd}:{}),...(typeof eventData.providerDecisionId==='string'?{requestId:eventData.providerDecisionId}:{}),...(typeof providerCost.details==='string'?{details:providerCost.details}:{})});
+        if(providerCost.status!=='not_applicable')costComponents.push({provider,model:typeof eventData.model==='string'?eventData.model:this.config.decisionModel,source:`${provider} decision selection`,status,...(typeof providerCost.usd==='number'?{usd:providerCost.usd}:{}),...(typeof eventData.providerDecisionId==='string'?{requestId:eventData.providerDecisionId}:{}),...(typeof providerCost.details==='string'?{details:providerCost.details}:{})});
       }
       await trace.event(type,data);
     }};
     const timing:HarnessResult['timing']={totalMs:0};
     let executionStart:number|undefined;
-    const decisionTrace:DecisionTrace={schemaVersion:'1.0',runId,eligibleRouteIds:[],decisionStatus:'no_candidates'};
+    const decisionTrace:DecisionTrace={schemaVersion:'1.1',decisionProvider:this.decisionProvider,runId,eligibleRouteIds:[],decisionStatus:'no_candidates'};
     let result:HarnessResult|undefined;
     const fingerprint=createHash('sha256').update(JSON.stringify(task)).digest('hex');
     try {
@@ -79,7 +99,8 @@ export class HarnessRouter {
       }catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;
         const old=JSON.parse(await readFile(indexPath,'utf8'));
         if(old.fingerprint!==fingerprint)throw new RouterError('idempotency_conflict','taskId already used for a different task; use a new taskId');
-        const oldResult=await this.getRun(old.runId);
+        let oldResult:Record<string,unknown>;
+        try{oldResult=await this.getRun(old.runId);}catch{throw new RouterError('reconciliation_required',`Previous request ${old.runId} is not yet finalized; inspect get_run instead of resubmitting`);}
         if('result' in oldResult && oldResult.result) return oldResult.result as HarnessResult;
         throw new RouterError('reconciliation_required',`Previous request ${old.runId} may still be executing; inspect get_run instead of resubmitting`);
       }
@@ -91,33 +112,60 @@ export class HarnessRouter {
         if(typeof task.context?.url!=='string')throw new RouterError('invalid_browser_task','Browser task requires context.url');
         await validatePublicUrl(task.context.url,this.config.allowedDomains);
       }
-      const registry=await loadRegistry(this.config.registryPath);
-      const health=await this.health();checkAbort(signal);
+      const registry=await this.registry();
+      const health=await this.health({ids:taskHealthCandidates(task,registry,this.config),signal});checkAbort(signal);
+      const healthCheckedAt=performance.now();
       const effectiveBudget=Math.min(this.ledger.remainingUsd,task.maxCostUsd??this.config.perTaskUsd,this.config.perTaskUsd);
-      const options=getEligibleRoutes(task,registry,health,{allowPaid:this.config.allowPaid,dryRun:this.config.dryRun,remainingBudgetUsd:effectiveBudget,allowedDomains:this.config.allowedDomains,credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}});
+      const policy={allowPaid:this.config.allowPaid,dryRun:this.config.dryRun,selector:this.config.selector??'decisions',decisionRequiresPaid:this.decisionPaid,decisionReservationUsd:this.decisionReserve,workerProfiles:this.config.workerProfiles,allowExecution:this.config.allowExecution,remainingBudgetUsd:effectiveBudget,allowedDomains:this.config.allowedDomains,credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
+      let options=getExecutableRoutes(task,registry,health,policy);
       const budget=this.ledger.forRun(runId,Math.min(task.maxCostUsd??this.config.perTaskUsd,this.config.perTaskUsd));
-      // Reuse the pure specialist planner to check all image constraints before offering a route.
-      // This does not submit a job or reserve any provider spend.
-      options.eligible=options.eligible.filter(candidate=>{
-        if(candidate.harness.id!=='fal-creative')return true;
-        const plan=planCreativeTask(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:Math.max(0,budget.remainingUsd-.01),signal,artifactsDir:trace.directory,trace,budget});
-        if(plan.ok)return true;
-        options.excluded.push({id:candidate.route.id,reason:plan.code});return false;
-      });
+      // Adapters preflight their own constraints without provider calls or reservations.
+      const preflightEligible=[];
+      for(const candidate of options.eligible){
+        const adapter=this.adapters.find(a=>a.id===candidate.harness.id);
+        try{
+          await adapter?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget});
+          preflightEligible.push(candidate);
+        }catch(error){checkAbort(signal);options.excluded.push({id:candidate.route.id,reason:error instanceof RouterError?error.code:'adapter_preflight_failed'});}
+      }
+      options.eligible=preflightEligible;checkAbort(signal);
+      const pinned=applyStaticImageRoute(options.eligible,this.config.imageRoute,task);
+      options.eligible=pinned.eligible;
+      options.excluded.push(...pinned.excluded);
+      options=admitDecisionSelection(task,options,policy);
+      if(options.eligible.length>1&&(this.config.selector??'decisions')==='decisions'&&this.decisionPaid){
+        const admitted=[];
+        for(const candidate of options.eligible){
+          try{
+            await this.adapters.find(adapter=>adapter.id===candidate.harness.id)?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:Math.max(0,budget.remainingUsd-this.decisionReserve),signal,artifactsDir:trace.directory,trace,budget});
+            admitted.push(candidate);
+          }catch(error){checkAbort(signal);options.excluded.push({id:candidate.route.id,reason:error instanceof RouterError?error.code:'adapter_preflight_failed'});}
+        }
+        options.eligible=admitted;checkAbort(signal);
+      }
       if(!options.eligible.some(c=>c.harness.kind!=='host_defer')&&!task.requirements.some(r=>r==='coding'||r==='host_owned_tasks')) {
         options.eligible=options.eligible.filter(c=>c.harness.kind!=='host_defer');
         options.excluded.push({id:'native:defer',reason:'no_eligible_specialist_for_control_fallback'});
       }
       decisionTrace.eligibleRouteIds=options.eligible.map(c=>c.route.id);decisionTrace.excludedRoutes=options.excluded;
-      await trace.event('eligibility',{...options,health});
+      await trace.event('eligibility',{...options,health});checkAbort(signal);
       if(!options.eligible.length)throw new RouterError(options.excluded.some(r=>/paid|permission|approval/.test(r.reason))?'permission_required':'no_eligible_route','No authorized reachable route satisfies every task constraint');
       if(options.eligible.length===1&&options.eligible[0].harness.id==='native') {
         selectedRouteId=options.eligible[0].route.id;selectedHarnessId='native';
         await trace.event('host_control_defer',{reason:'No specialist delegation applies; no Decisions request sent'});
-        const nativeResult:HarnessResult={schemaVersion:'1.2',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId,selectedHarnessId,selectedModelId:null,summary:'Task belongs to the current Codex host. No decision or external execution performed.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing:{totalMs:performance.now()-trace.start},cost:{status:'not_applicable',usd:0},usage:[],costComponents:[],tracePath:trace.path};
+        const nativeResult:HarnessResult={schemaVersion:task.schemaVersion==='1.1'?'1.3':'1.2',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId,selectedHarnessId,selectedModelId:null,summary:'Task belongs to the current host. No decision or external execution performed.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing:{totalMs:performance.now()-trace.start},cost:{status:'not_applicable',usd:0},usage:[],costComponents:[],tracePath:trace.path};
         validateResult(nativeResult);await trace.save('decision.json',{...decisionTrace,decisionStatus:'not_required',reason:'host_control_defer_no_decision'});await trace.save('result.json',nativeResult);await trace.save('status.json',{runId,status:nativeResult.status});return nativeResult;
       }
       let chosen=options.eligible[0]!;
+      if((this.config.selector??'decisions')!=='decisions'&&options.eligible.length>1){
+        const local=selectLocal(options.eligible,this.config.workerProfiles);
+        if(!local){
+          result={schemaVersion:'1.3',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId:null,selectedHarnessId:null,selectedModelId:null,summary:'Several eligible routes have equal priority. Choose preferredRouteId or configure worker priorities.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing:{totalMs:performance.now()-trace.start},cost:{status:'not_applicable',usd:0},usage:[],costComponents:[],tracePath:trace.path};
+          await trace.save('decision.json',{...decisionTrace,decisionStatus:'not_required',reason:'local_priority_tie'});validateResult(result);await trace.save('result.json',result);await trace.save('status.json',{runId,status:result.status});return result;
+        }
+        chosen=local;options.eligible=[local];
+      }
+
       if(options.eligible.length===1) {
         selectedRouteId=chosen.route.id;
         decisionTrace.decisionStatus='not_required';
@@ -138,15 +186,18 @@ export class HarnessRouter {
       validateTrace(decisionTrace);await trace.save('decision.json',decisionTrace);
       await trace.event('selected',{route:selectedRouteId,harness:selectedHarnessId,model:selectedModelId});
       if(selectedHarnessId==='native') {
-        result={schemaVersion:'1.2',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId,selectedHarnessId,selectedModelId:null,summary:'Return this task to the current Codex session for host execution.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing,cost:decisionCost,usage:usageRecords,costComponents};
+        result={schemaVersion:task.schemaVersion==='1.1'?'1.3':'1.2',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId,selectedHarnessId,selectedModelId:null,summary:'Return this task to the current host session for host execution.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing,cost:decisionCost,usage:usageRecords,costComponents};
       }else {
         const adapter=this.adapters.find(a=>a.id===selectedHarnessId);if(!adapter)throw new RouterError('adapter_unavailable','Selected harness adapter is unavailable');
-        // Recheck liveness after selection; no paid execution on a stale eligibility result.
-        if(!(await adapter.health()).available)throw new RouterError('adapter_unavailable','Selected harness became unavailable');
+        // API selection or a slow preflight invalidates the short-lived local health snapshot.
+        if((decisionRequired||performance.now()-healthCheckedAt>1000)&&!(await abortable(adapter.health({signal}),signal)).available)throw new RouterError('adapter_unavailable','Selected harness became unavailable');
         checkAbort(signal);await trace.save('status.json',{runId,status:'executing',selectedRouteId});
         executionStart=performance.now();
-        const output=await adapter.execute({...task,timeoutMs:timeout},{runId,routeId:selectedRouteId,route:chosen.route,modelProfileId:chosen.route.agent_model_profile??undefined,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget});
-        timing.executionMs=performance.now()-executionStart;timing.handoffMs=output.timing?.handoffMs??0;
+        const executionContext={runId,routeId:selectedRouteId,route:chosen.route,modelProfileId:chosen.route.agent_model_profile??undefined,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget};
+        await adapter.preflight?.(task,executionContext);
+        const output=await adapter.execute({...task,timeoutMs:timeout},executionContext);
+        await adapter.verify?.(task,output,executionContext);
+        timing.executionMs=output.timing?.executionMs??performance.now()-executionStart;timing.handoffMs=output.timing?.handoffMs??0;
         selectedModelId=output.selectedModelId??selectedModelId;
         usageRecords.push(...(output.usage??[]));
         const outputCost=output.cost;
@@ -159,8 +210,10 @@ export class HarnessRouter {
         await trace.save('adapter-output.json',output);
         const verificationStart=performance.now();
         if(output.status==='completed') {
-          const needsImage=chosen.harness.id==='fal-creative';
-          if(!output.artifacts.some(a=>a.type===(needsImage?'image':'screenshot')))throw new RouterError('artifact_missing','Harness completed without required artifact evidence');
+          const expected=task.desiredOutput??(task.requirements.includes('screenshot')?'screenshot':task.requirements.some(r=>['image','text_to_image'].includes(r))?'image':'text');
+          if(expected!=='mixed'&&!output.artifacts.some(a=>a.type===expected))throw new RouterError('artifact_missing','Harness completed without required artifact evidence');
+          if(!output.artifacts.length)throw new RouterError('artifact_missing','Completed execution must return inspectable evidence');
+          for(const artifact of output.artifacts){if(artifact.path)await assertArtifactPath(artifact.path,trace.directory);}
           for(const artifact of output.artifacts){
             if(artifact.type==='image'||artifact.type==='screenshot'){
               if(!artifact.path)throw new RouterError('artifact_missing','Image result must have a local evidence file');
@@ -171,9 +224,10 @@ export class HarnessRouter {
             }
           }
         }
-        timing.verificationMs=performance.now()-verificationStart;
-        const aggregateCost=output.cost.status==='unknown'?{status:'unknown' as const,details:decisionCost.status==='not_applicable'?'Includes unpriced harness/provider accounting; no Decisions request was made':'Includes unpriced harness/provider accounting plus Decisions'}:{status:'estimated' as const,usd:(output.cost.usd??0)+(decisionCost.usd??0),details:'Verified published unit price estimate; not a provider invoice'};
-        result={schemaVersion:'1.2',runId,taskId:task.taskId,status:output.status,selectedRouteId,selectedHarnessId,selectedModelId,summary:output.summary,structuredOutput:output.structuredOutput,artifacts:output.artifacts,criterionResults:[],timing,cost:aggregateCost,usage:usageRecords,costComponents,...(output.error?{error:output.error}:{})};
+        checkAbort(signal);
+        timing.verificationMs=(output.timing?.verificationMs??0)+performance.now()-verificationStart;
+        const aggregateCost=output.cost.status==='unknown'||decisionCost.status==='unknown'?{status:'unknown' as const,details:'Includes unpriced execution or routing accounting; inspect costComponents for any known subtotal'}:{status:'estimated' as const,usd:(output.cost.usd??0)+(decisionCost.usd??0),details:'Verified published unit price estimate; not a provider invoice'};
+        result={schemaVersion:task.schemaVersion==='1.1'?'1.3':'1.2',runId,taskId:task.taskId,status:output.status,selectedRouteId,selectedHarnessId,selectedModelId,summary:output.summary,structuredOutput:output.structuredOutput,artifacts:output.artifacts,criterionResults:[],timing,cost:aggregateCost,usage:usageRecords,costComponents,...(output.error?{error:output.error}:{})};
       }
     }catch(error) {
       const typed=signal.aborted?(signal.reason instanceof RouterError?signal.reason:new RouterError('cancelled','Task cancelled')):error instanceof RouterError?error:new RouterError('execution_failed',error instanceof Error?error.message:'Unknown execution error');
@@ -181,8 +235,8 @@ export class HarnessRouter {
       decisionTrace.decisionStatus=decisionTrace.decisionStatus==='not_required'?'not_required':selectedRouteId?'selected':typed.code==='decision_refused'?'refused':typed.code==='timeout'||typed.code==='decision_timeout'?'timeout':['invalid_choice','invalid_decision_response','invalid_decision'].includes(typed.code)?'invalid_response':typed.code==='no_eligible_route'?'no_candidates':'unavailable';
       decisionTrace.reason=typed.code;
       if(decisionRequired&&decisionAttempted&&!decisionMeteringObserved) {
-        usageRecords.push(normalizeUsageRecord({provider:'openai',model:this.config.decisionModel,source:'decisions_api',measurement:'unavailable',details:'The Decisions attempt did not return token usage.'}));
-        if(!['credential_missing:openai','paid_execution_not_authorized','dry_run_execution_disabled'].includes(typed.code))costComponents.push({provider:'openai',model:this.config.decisionModel,source:'OpenAI Decisions API attempt',status:'unknown',details:'Provider billing could not be reconciled from the response.'});
+        usageRecords.push(normalizeUsageRecord({provider:this.decisionProvider,model:this.config.decisionModel,source:this.decisionProvider==='openai'?'decisions_api':`${this.decisionProvider}_decisions.canonical_v1`,measurement:'unavailable',details:'The Decisions attempt did not return token usage.'}));
+        if(this.decisionPaid&&!['credential_missing:openai','paid_execution_not_authorized','dry_run_execution_disabled'].includes(typed.code))costComponents.push({provider:this.decisionProvider,model:this.config.decisionModel,source:`${this.decisionProvider} decision attempt`,status:'unknown',details:'Provider billing could not be reconciled from the response.'});
       }
       if(executionStart!==undefined&&selectedHarnessId&&selectedModelId&&!costComponents.some(component=>component.model===selectedModelId)) {
         const provider=selectedHarnessId==='pi-browser'?(await this.health())[selectedHarnessId]?.provider??'openai-codex':selectedHarnessId==='fal-creative'?'fal':selectedHarnessId;
@@ -190,7 +244,7 @@ export class HarnessRouter {
       }
       if(executionStart!==undefined&&selectedHarnessId==='pi-browser'&&!usageRecords.some(record=>record.source==='pi_session_stats'))usageRecords.push(normalizeUsageRecord({provider:'openai-codex',model:selectedModelId??undefined,source:'pi_session_stats',measurement:'unavailable',details:'Pi execution failed before session token usage could be collected.'}));
       await trace.event('failure',{code:typed.code,message:typed.message,retryable:typed.retryable});
-      result={schemaVersion:'1.2',runId,taskId:task.taskId,status:typed.code==='permission_required'?'permission_required':typed.code==='cancelled'?'cancelled':['no_eligible_route','unsafe_url','domain_denied','invalid_browser_task'].includes(typed.code)?'rejected':'failed',selectedRouteId,selectedHarnessId,selectedModelId,artifacts:[],criterionResults:[],timing,cost:executionStart!==undefined?{status:'unknown',details:'Execution failed; a provider operation may still bill. Inspect trace/request ID before retry.'}:this.ledger.costForRun(runId),usage:usageRecords,costComponents,error:{code:typed.code,message:typed.message,retryable:typed.retryable}};
+      result={schemaVersion:task.schemaVersion==='1.1'?'1.3':'1.2',runId,taskId:task.taskId,status:typed.code==='permission_required'?'permission_required':typed.code==='cancelled'?'cancelled':['no_eligible_route','unsafe_url','domain_denied','invalid_browser_task'].includes(typed.code)?'rejected':'failed',selectedRouteId,selectedHarnessId,selectedModelId,artifacts:[],criterionResults:[],timing,cost:executionStart!==undefined?{status:'unknown',details:'Execution failed; a provider operation may still bill. Inspect trace/request ID before retry.'}:this.ledger.costForRun(runId),usage:usageRecords,costComponents,error:{code:typed.code,message:typed.message,retryable:typed.retryable}};
     }finally{clearTimeout(timer);hostSignal?.removeEventListener('abort',abort);this.active.delete(runId);}
     if(!result)throw new RouterError('internal_error','Missing result');
     result.criterionResults=evaluateCriteria(task,result);
@@ -212,3 +266,28 @@ export class HarnessRouter {
   async close(){for(const controller of this.active.values())controller.abort();await Promise.all(this.adapters.map(a=>a.close?.()));await Promise.allSettled(this.pending.values());await this.ledger.close();}
 }
 function isRecord(value:unknown):value is Record<string,unknown>{return typeof value==='object'&&value!==null&&!Array.isArray(value);}
+
+/** Bound a health await even when a third-party adapter ignores the optional signal. */
+function abortable<T>(operation:Promise<T>,signal?:AbortSignal):Promise<T>{
+  if(!signal)return operation;
+  return new Promise<T>((resolve,reject)=>{
+    const abort=()=>reject(signal.reason??new RouterError('cancelled','Task cancelled'));
+    signal.addEventListener('abort',abort,{once:true});
+    operation.then(value=>{signal.removeEventListener('abort',abort);if(signal.aborted)abort();else resolve(value);},error=>{signal.removeEventListener('abort',abort);reject(error);});
+    if(signal.aborted)abort();
+  });
+}
+/** Cheap task/policy filtering before starting native runtime probes; full eligibility still follows. */
+function taskHealthCandidates(task:HarnessTask,registry:Registry,config:RouterConfig):Set<string>{
+  const ids=new Set<string>();
+  const normalize=(value:string)=>value.trim().toLowerCase();
+  const requirements=task.requirements.map(normalize);
+  for(const harness of registry.harnesses){
+    if(!harness.enabled||config.dryRun&&harness.kind!=='host_defer')continue;
+    const profile=config.workerProfiles?.find(profile=>profile.id===harness.id);
+    if(profile&&(!config.allowExecution||!profile.enabled||!profile.allowExecution||!profile.allowUnknownCost||!task.allowUnknownCost||!task.workspace))continue;
+    if((task.requiredCapabilities??[]).some(capability=>!harness.capabilities.map(normalize).includes(normalize(capability))))continue;
+    if(harness.routes.some(route=>route.enabled!==false&&(!task.preferredRouteId||route.id===task.preferredRouteId)&&requirements.every(requirement=>route.eligible_requirements.map(normalize).includes(requirement))&&(!task.desiredOutput||route.modalities.includes(task.desiredOutput))))ids.add(harness.id);
+  }
+  return ids;
+}

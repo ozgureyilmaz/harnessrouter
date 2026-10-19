@@ -1,5 +1,5 @@
 import {mkdir,open,readdir,readFile,rename,unlink,writeFile} from 'node:fs/promises';
-import {join,resolve} from 'node:path';
+import {join,resolve,relative} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import type {BenchmarkRunRecord,UsageRecord,CostComponent} from '../domain/types.js';
 import {validateBenchmarkRun,validateResult} from '../domain/schemas.js';
@@ -95,6 +95,20 @@ export async function importBenchmarkCosts(artifactsDir:string,benchmarkRunId:st
     if(component.requestId){const key=`${component.provider}/${component.requestId}`;if(seen.has(key))throw new Error('This provider request cost was already imported.');seen.add(key);}
   }
   const updated={...record,costComponents:[...record.costComponents,...components]};validateBenchmarkRun(updated);
+  await updateBenchmarkRun(artifactsDir,updated);return updated;
+}
+
+/** Reviewed direct-arm image counts are explicit imports, separate from text tokens. */
+export async function importBenchmarkMedia(artifactsDir:string,benchmarkRunId:string,media:NonNullable<BenchmarkRunRecord['mediaOutputs']>,evidence:string):Promise<BenchmarkRunRecord> {
+  if(!/^[a-f0-9-]{36}$/.test(benchmarkRunId)||!media.length||!evidence.trim()||evidence.length>2000)throw new Error('A valid run ID, media records and review evidence are required.');
+  const path=join(benchmarkDirectory(artifactsDir),'runs',`${benchmarkRunId}.json`);
+  const record:unknown=JSON.parse(await readFile(path,'utf8'));validateBenchmarkRun(record);
+  if(record.mediaImportHistory?.length)throw new Error('Media units already imported for this run; include all direct outputs in one import.');
+  const importedAt=new Date().toISOString();
+  const evidenceDirectory=join(benchmarkDirectory(artifactsDir),'evidence');await mkdir(evidenceDirectory,{recursive:true,mode:0o700});
+  const evidencePath=relative(artifactsDir,join(evidenceDirectory,`${benchmarkRunId}-media-import.json`));
+  const updated={...record,mediaOutputs:[...(record.mediaOutputs??[]),...media],mediaImportHistory:[{importedAt,evidencePath}]};validateBenchmarkRun(updated);
+  await writeFile(join(artifactsDir,evidencePath),JSON.stringify({importedAt,measurement:'manual_import',evidence,media},null,2)+'\n',{mode:0o600,flag:'wx'});
   await updateBenchmarkRun(artifactsDir,updated);return updated;
 }
 
