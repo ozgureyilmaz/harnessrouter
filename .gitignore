@@ -1,18 +1,50 @@
-# Dependencies and generated output
+# Dependencies and build output
 node_modules/
 dist/
+build/
+out/
 coverage/
+.nyc_output/
 artifacts/
-*.log
 
-# Local secrets; keep the public configuration template
+# Caches
+.turbo/
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Secrets. The public template stays tracked.
 .env
 .env.*
+!.env.example
 !config/.env.example
 
-# Local agent setup and build-session documents
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local agent and runtime directories
 /.codex/
 /.claude/
+/.cursor/
+/.pi/
+/.opencode/
+/.agents/
+/.harnessrouter/
+
+# Personal session notes that stay on the machine
 /AGENTS.md
 /CLAUDE.md
 /CODEX_BUILD_PROMPT.md
@@ -21,15 +53,6 @@ artifacts/
 /docs/BUILD_LOG.md
 /docs/PI_AUDIT.md
 
-# Local presentation work
+# Local presentation builds
 /.presentation-build/
 /presentation-output/
-
-# Editor and operating-system files
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
