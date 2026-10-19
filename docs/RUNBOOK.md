@@ -4,12 +4,11 @@ This is the post-build runbook. Older bootstrap instructions below are retained 
 
 ## Project location
 
-Expected terminal context: `ozgur@air ~/dev/harnessrouter $`. Resolve using `cd ~/dev/harnessrouter && pwd` rather than assuming username/home absolute spelling. Prepare from within this directory.
+Run these commands from the repository root, the directory that contains `package.json`.
 
 ## Check the current checkout and runtimes
 
 ```bash
-cd ~/dev/harnessrouter
 pwd
 git status --short
 node --version

@@ -45,7 +45,7 @@ Task-aware execution across *multiple actual harness runtimes*, not merely a too
 - **Harness:** self-contained specialized policy and lifecycle: execution loop, tool set, allowed models, context strategy, constraints/permissions, failure recovery, result verification, trace/artifact production.
 - **Router:** discovers eligible harness routes and selects which harness+model profile receives a task.
 
-`fal-creative` must implement a real specialization layer on top of fal, not simply renaming the API call. The small controlled agent-style lifecycle is sufficient for hackathon scope; more LLM calls are not necessarily better.
+`fal-creative` must implement a real specialization layer on top of fal, not simply renaming the API call. The small controlled agent-style lifecycle is enough for the current product scope; more LLM calls are not necessarily better.
 
 ## Success metrics
 

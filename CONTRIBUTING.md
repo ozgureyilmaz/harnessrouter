@@ -1,6 +1,6 @@
 # Contributing
 
-Use Node.js 22.19+ in the Node 22 line or Node 24, npm, and Git on macOS/Linux. Windows development uses WSL2. Read any applicable local `AGENTS.md` instructions and the [release gates](docs/OPEN_SOURCE_RELEASE.md) before changing execution behavior.
+Use Node.js 22.19+ in the Node 22 line or Node 24, npm, and Git on macOS/Linux. Windows development uses WSL2. This project follows the [code of conduct](CODE_OF_CONDUCT.md). Read any applicable local `AGENTS.md` instructions and the [release gates](docs/OPEN_SOURCE_RELEASE.md) before changing execution behavior.
 
 Node 24 is recommended for development and evaluation. DeepEval's development-only PostHog dependency declares Node 22.22+ and produces an engine warning on 22.19; a strict engine policy may reject that development install. The production package excludes development dependencies. The tested Node 22.19 core and evaluation imports still pass, but an install warning is not an upstream support guarantee.
 

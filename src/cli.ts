@@ -106,6 +106,10 @@ function probeEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   for (const key of ['PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'TMP', 'TEMP', 'SYSTEMROOT', 'WINDIR']) {
     if (env[key]) result[key] = env[key];
   }
+  // Callers sometimes pass a partial env (tests, stripped shells). Without PATH,
+  // macOS resolves git to the /usr/bin/git xcrun stub, which can sit until timeout.
+  if (!result.PATH && process.env.PATH) result.PATH = process.env.PATH;
+  result.GIT_TERMINAL_PROMPT = '0';
   result.NO_COLOR = '1';
   return result;
 }
@@ -142,7 +146,7 @@ async function doctor(configPath: string|undefined, cwd: string, env: NodeJS.Pro
   }
   report('Decision layer',decisionStatus,decisionDetail);
   try {
-    const git = await runProcess('git', ['--version'], {cwd: PROJECT_ROOT, env: safeEnv, timeoutMs: 3000, maxBytes: 8192});
+    const git = await runProcess('git', ['--version'], {cwd: PROJECT_ROOT, env: safeEnv, timeoutMs: 10_000, maxBytes: 8192});
     report('Git', 'ok', git.stdout.trim());
   } catch { report('Git', 'error', 'git --version failed'); }
   const profiles = config.workerProfiles ?? [];

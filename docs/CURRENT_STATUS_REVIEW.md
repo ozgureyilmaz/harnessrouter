@@ -4,7 +4,7 @@
 
 ## Product assessment
 
-The implementation follows the repository's hackathon product thesis: the current Codex session delegates one task at a time through local MCP to an independent Pi browser runtime or the purpose-built fal-creative harness. It filters authorized/reachable/capable routes before selection and returns inspectable results, artifacts, criteria, usage, cost components, and traces. Codex owns composition through two explicit calls.
+The implementation follows the repository's product thesis: the current Codex session delegates one task at a time through local MCP to an independent Pi browser runtime or the purpose-built fal-creative harness. It filters authorized/reachable/capable routes before selection and returns inspectable results, artifacts, criteria, usage, cost components, and traces. Codex owns composition through two explicit calls.
 
 The supported claim is **cross-harness interoperability**. Improvement in task success, speed, cost, or image quality is unproven. The broader agent-harness platform remains separate scope; this local routing gateway can be a replaceable component within it.
 

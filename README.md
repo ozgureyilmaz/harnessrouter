@@ -221,4 +221,5 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [security and cost](docs/SECURITY_AND_COST.md)
 - [security](SECURITY.md)
 - [contributing](CONTRIBUTING.md)
+- [code of conduct](CODE_OF_CONDUCT.md)
 - [deepwiki](https://deepwiki.com/ozgureyilmaz/harnessrouter)

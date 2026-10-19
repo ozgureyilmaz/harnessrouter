@@ -127,11 +127,21 @@ test('doctor reports missing active live decision credentials without probing th
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
+test('doctor finds git when the caller env omits PATH', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-doctor-nopath-'));
+  try {
+    const output = capture();
+    const env = {XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state')};
+    assert.equal(await runCli(['doctor'], {...output.io, cwd: dir, env}), 0);
+    assert.match(output.stdout, /OK Git: git version/);
+  } finally { await rm(dir, {recursive: true, force: true}); }
+});
+
 test('doctor reports configured Ollaya as configured while leaving live availability unverified', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-doctor-ollaya-'));
   try {
     const output = capture();
-    const env = {XDG_CONFIG_HOME: join(dir, 'config'), XDG_STATE_HOME: join(dir, 'state'), ROUTER_DECISION_PROVIDER: 'ollaya', ROUTER_DRY_RUN: 'false', ROUTER_ALLOW_EXECUTION: 'true'};
+    const env = {...envForCli(dir), ROUTER_DECISION_PROVIDER: 'ollaya', ROUTER_DRY_RUN: 'false', ROUTER_ALLOW_EXECUTION: 'true'};
     assert.equal(await runCli(['doctor'], {...output.io, cwd: dir, env}), 0);
     assert.match(output.stdout, /OK Decision layer: selector=decisions; provider=ollaya; model=laya:typed-decisions; local base URL=http:\/\/127\.0\.0\.1:11435/);
     assert.match(output.stdout, /configuration valid, no request made, live availability unverified/);

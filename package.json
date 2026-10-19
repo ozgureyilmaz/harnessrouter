@@ -1,7 +1,7 @@
 {
   "name": "harnessrouter",
   "version": "1.0.0",
-  "description": "Task-aware MCP gateway for independently verified agent harness execution",
+  "description": "Local MCP router that hands a bounded task to Codex, Claude Code, OpenCode, or Pi and returns text or a patch.",
   "main": "dist/api.js",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
@@ -27,6 +27,8 @@
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
+    "router",
     "agents",
     "harness",
     "codex",
@@ -87,11 +89,16 @@
     "README.md",
     "LICENSE",
     "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
     "SECURITY.md"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ozgureyilmaz/harnessrouter.git"
+  },
+  "homepage": "https://github.com/ozgureyilmaz/harnessrouter",
+  "bugs": {
+    "url": "https://github.com/ozgureyilmaz/harnessrouter/issues"
   },
   "optionalDependencies": {
     "@earendil-works/pi-coding-agent": "1.1.0",
