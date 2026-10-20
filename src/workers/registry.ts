@@ -1,6 +1,12 @@
 import type {HarnessManifest, Route} from '../domain/types.js';
-import type {WorkerProfile} from './types.js';
+import type {WorkerKind, WorkerProfile} from './types.js';
 import {RouterError} from '../domain/errors.js';
+const routeDescriptions: Record<WorkerKind, string> = {
+  codex: 'Implements code changes and returns a patch.',
+  'claude-code': 'Read-only review and explanation when the task says not to edit.',
+  opencode: 'Edits the repository and returns a patch.',
+  pi: 'Local model that reads or edits snapshot files.',
+};
 /** Profiles are trusted local configuration; manifests never carry executable code. */
 export function workerManifests(profiles:readonly WorkerProfile[]):HarnessManifest[]{
   return profiles.map(profile=>({
@@ -9,7 +15,7 @@ export function workerManifests(profiles:readonly WorkerProfile[]):HarnessManife
     permissions:['workspace_read','isolated_workspace_write'],
     capabilities:['coding','review','text','workspace.read','workspace.patch'],
     default_timeout_ms:profile.timeoutMs??120000,
-    routes:[{id:`${profile.id}:configured`,description:`${profile.adapter} independent worker (${profile.model}); isolated snapshot and reviewable patch.`,agent_model_profile:profile.model,modalities:['text','patch'],eligible_requirements:['coding','review','text'],price_status:'unknown'}],
+    routes:[{id:`${profile.id}:configured`,description:profile.description?.trim()||routeDescriptions[profile.adapter],agent_model_profile:profile.model,modalities:['text','patch'],eligible_requirements:['coding','review','text'],price_status:'unknown'}],
   }));
 }
 export function validateWorkerManifest(manifest:HarnessManifest,profile:WorkerProfile):void{
