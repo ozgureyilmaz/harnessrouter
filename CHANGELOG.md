@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Snapshot exclusion matches control directories by exact name and secret files by filename or basename glob. Ordinary paths such as `src/hooks/useAuth.ts` and `docs/agents.md` stay in the snapshot. Cloud keys, shell credential files, Terraform state, and `.env*` files other than `.env.example` and `.env.sample` stay out. Excluded paths are recorded on `worker.started` and on the run result.
 - A crashed router no longer leaves a worker lease and an `executing` run stuck. Startup and `harnessrouter reconcile` mark a dead lease `interrupted`, release it, and delete its snapshot. A live lease returns `worker_busy`.
 - Run snapshots and OpenCode isolation directories are deleted after the patch or text is saved.
+- Lease classification no longer depends on Linux `/proc` alone. macOS reads another process's start time from `ps` and its boot id from `kern.bootsessionuuid`. The router's own pid uses its process uptime.
+- Snapshot checks accept the macOS `/tmp` and `/var` system aliases and still reject every other symlink.
 
 ### Added
 

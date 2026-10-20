@@ -141,7 +141,7 @@ stateDiagram-v2
 
 Every worker profile has one lease under `artifactsDir/worker-leases/`. The lease stores the pid, hostname, boot id, and process start time. Reconcile runs when the server starts, before a lease is acquired, and from `harnessrouter reconcile [--dry-run]`.
 
-- A dead pid (`ESRCH`), another hostname, another boot, or a reused pid is terminal. The run becomes `interrupted`, an event is appended to `events.jsonl`, the lease is removed, and the snapshot is deleted.
+- A dead pid (`ESRCH`), another hostname, another boot, or a reused pid is terminal. The run becomes `interrupted`, an event is appended to `events.jsonl`, the lease is removed, and the snapshot is deleted. Linux reads the start time from `/proc/<pid>/stat` and the boot id from `/proc/sys/kernel/random/boot_id`. macOS reads another process's elapsed time with `ps -o etime` and the boot id from `kern.bootsessionuuid`. The router's own pid uses its process uptime, because that pid cannot have been reused while this process is running.
 - A live pid is never changed. A second caller for that profile receives `worker_busy`.
 - `worker_reconciliation_required` remains only when the pid exists but its start time cannot be read, so pid reuse cannot be ruled out.
 
@@ -149,7 +149,7 @@ Every worker profile has one lease under `artifactsDir/worker-leases/`. The leas
 
 The worker adapter deletes the snapshot workspace and OpenCode isolation directories in a `finally` block after output is collected and the lease is released. `status.json`, `events.jsonl`, and the saved patch remain. `keepSnapshots` defaults to false (`HARNESSROUTER_KEEP_SNAPSHOTS=1` keeps them). Optional `snapshotExclude` and `snapshotInclude` globs add workspace rules. An include cannot restore `.git`.
 
-Snapshot rules match control directories by exact path segment and secret files by exact basename or basename glob. A directory whose name merely contains `auth`, `token`, `secret`, or `hooks` is included. Git hooks are excluded only at `.git/hooks` and `.husky`. The `worker.started` event and the run result record `workspaceExclusions` with the full count and up to 50 paths.
+Snapshot rules match control directories by exact path segment and secret files by exact basename or basename glob. A directory whose name merely contains `auth`, `token`, `secret`, or `hooks` is included. Git hooks are excluded only at `.git/hooks` and `.husky`. The `worker.started` event and the run result record `workspaceExclusions` with the full count and up to 50 paths. Workspace paths still fail closed on symlinks. The only exception is macOS, where `/tmp` and `/var` are accepted solely when they point at `/private/tmp` and `/private/var`.
 
 ## Implemented project areas
 

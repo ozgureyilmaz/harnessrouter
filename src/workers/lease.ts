@@ -1,3 +1,4 @@
+import {execFileSync} from 'node:child_process';
 import {appendFile, mkdir, readdir, readFile, writeFile, unlink, lstat} from 'node:fs/promises';
 import {readFileSync} from 'node:fs';
 import {hostname} from 'node:os';
@@ -147,8 +148,22 @@ async function readLease(path: string): Promise<WorkerLease> {
   }
   return JSON.parse(await readFile(path, 'utf8')) as WorkerLease;
 }
+let cachedBootId: {value: string | undefined} | undefined;
 function readBootId(): string | undefined {
-  try { return readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim() || undefined; } catch { return undefined; }
+  if (!cachedBootId) cachedBootId = {value: loadBootId()};
+  return cachedBootId.value;
+}
+function loadBootId(): string | undefined {
+  if (process.platform === 'linux') {
+    try { return readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim() || undefined; } catch { return undefined; }
+  }
+  if (process.platform === 'darwin') {
+    try {
+      const id = execFileSync('/usr/sbin/sysctl', ['-n', 'kern.bootsessionuuid'], {encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'ignore']}).trim();
+      return /^[0-9A-Fa-f-]{36}$/.test(id) ? id : undefined;
+    } catch { return undefined; }
+  }
+  return undefined;
 }
 function pidExists(pid: number): 'alive' | 'dead' | 'unknown' {
   try { process.kill(pid, 0); return 'alive'; }
@@ -159,7 +174,25 @@ function pidExists(pid: number): 'alive' | 'dead' | 'unknown' {
     return 'unknown';
   }
 }
+/** Parse BSD `ps -o etime=` (`[[dd-]hh:]mm:ss`) into milliseconds. */
+export function psEtimeToMs(value: string): number | undefined {
+  const match = /^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/.exec(value.trim());
+  if (!match) return undefined;
+  const days = Number(match[1] ?? 0);
+  const hours = Number(match[2] ?? 0);
+  const minutes = Number(match[3]);
+  const seconds = Number(match[4]);
+  if (hours > 23 || minutes > 59 || seconds > 59) return undefined;
+  return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+}
 function processStartMs(pid: number): number | undefined {
+  // This process cannot observe a reused copy of its own pid. Compare the start time it records.
+  if (pid === process.pid) return Date.now() - process.uptime() * 1000;
+  if (process.platform === 'linux') return linuxProcessStartMs(pid);
+  if (process.platform === 'darwin') return darwinProcessStartMs(pid);
+  return undefined;
+}
+function linuxProcessStartMs(pid: number): number | undefined {
   try {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
     const fields = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/);
@@ -168,5 +201,13 @@ function processStartMs(pid: number): number | undefined {
     const hz = 100;
     if (!Number.isFinite(startTicks) || !Number.isFinite(uptime)) return undefined;
     return Date.now() - uptime * 1000 + (startTicks / hz) * 1000;
+  } catch { return undefined; }
+}
+function darwinProcessStartMs(pid: number): number | undefined {
+  try {
+    const etime = execFileSync('/bin/ps', ['-p', String(pid), '-o', 'etime='], {encoding: 'utf8', timeout: 1000, stdio: ['ignore', 'pipe', 'ignore']});
+    const elapsed = psEtimeToMs(etime);
+    if (elapsed === undefined) return undefined;
+    return Date.now() - elapsed;
   } catch { return undefined; }
 }
