@@ -24,7 +24,7 @@ Native account charges may remain unknown. Usage counters are provider-reported 
 
 ## Workspace results
 
-`prepareWorkspace(request, runDirectory, policy)` and `collectPatch(snapshot, runDirectory)` in `src/workspace/snapshot.ts` implement the snapshot boundary. Only trusted policy roots grant access. Workspace roots must resolve to repository roots without symlink components; run storage must be outside the source repository. The run-directory parent must already exist.
+`prepareWorkspace(request, runDirectory, policy)` and `collectPatch(snapshot, runDirectory)` in `src/workspace/snapshot.ts` implement the snapshot boundary. Only trusted policy roots grant access. Workspace roots must resolve to repository roots without symlink components; run storage must be outside the source repository. The run-directory parent must already exist. macOS temp directories may cross `/tmp` or `/var` only when that component is the system alias for `/private/tmp` or `/private/var`.
 
 The baseline contains current tracked regular files plus explicitly included untracked files, excluding protected control/secret paths. Dirty edits are part of the baseline; pre-capture deletions remain absent. Limits default to 5,000 files and 32 MiB. Known secret names, inherited harness configuration, `.git`, hooks, and dependency directories are excluded. Unsafe relative paths, symlinks, and hardlinks fail closed.
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {protectedWorkspacePath} from '../../src/workspace/snapshot.js';
+import {darwinSystemAlias, protectedWorkspacePath} from '../../src/workspace/snapshot.js';
 
 const cases: Array<[string, boolean]> = [
   ['src/hooks/useAuth.ts', false],
@@ -61,4 +61,13 @@ test('snapshot include can restore a secret file and can never restore .git', ()
   assert.equal(protectedWorkspacePath('src/local.log', {exclude: ['*.log']}), true);
   assert.equal(protectedWorkspacePath('notes.txt', {exclude: ['notes.txt']}), true);
   assert.equal(protectedWorkspacePath('src/hooks/useAuth.ts', {exclude: ['**/*.ts']}), true);
+});
+
+test('only the macOS system temp aliases have an accepted symlink target', () => {
+  assert.equal(darwinSystemAlias('/var', 'private/var'), '/private/var');
+  assert.equal(darwinSystemAlias('/tmp', '/private/tmp'), '/private/tmp');
+  assert.equal(darwinSystemAlias('/var', '/tmp'), undefined);
+  assert.equal(darwinSystemAlias('/var', '../etc'), undefined);
+  assert.equal(darwinSystemAlias('/Users/me/project', 'private/var'), undefined);
+  assert.equal(darwinSystemAlias('/private/var', 'somewhere'), undefined);
 });

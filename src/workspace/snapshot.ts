@@ -1,6 +1,6 @@
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile, chmod} from 'node:fs/promises';
+import {lstat, mkdir, mkdtemp, readdir, readFile, readlink, realpath, rm, writeFile, chmod} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 import {RouterError} from '../domain/errors.js';
@@ -95,14 +95,33 @@ export function protectedWorkspacePath(path: string, filter?: SnapshotFilter): b
   if (builtinProtected(normalized)) return true;
   return filter?.exclude?.some(pattern => matchesUserPattern(pattern, normalized)) ?? false;
 }
+/**
+ * macOS publishes `/tmp` and `/var` as symlinks to `/private/tmp` and `/private/var`.
+ * Those two aliases are the only links a workspace path may cross. The target must match exactly.
+ */
+export function darwinSystemAlias(linkPath: string, linkText: string): string | undefined {
+  const expected = linkPath === '/tmp' ? '/private/tmp' : linkPath === '/var' ? '/private/var' : undefined;
+  if (!expected) return undefined;
+  const resolved = isAbsolute(linkText) ? resolve(linkText) : resolve(dirname(linkPath), linkText);
+  return resolved === expected ? resolved : undefined;
+}
 async function noSymlinks(path: string, signal?: AbortSignal): Promise<void> {
   signal?.throwIfAborted();
   const absolute = resolve(path);
+  const parts = absolute.split(sep).filter(Boolean);
   let current = absolute.startsWith(sep) ? sep : '';
-  for (const part of absolute.split(sep).filter(Boolean)) {
+  for (let index = 0; index < parts.length; index++) {
     signal?.throwIfAborted();
-    current = join(current, part);
-    if ((await lstat(current)).isSymbolicLink()) fail('workspace_symlink', 'Workspace paths must not contain symlinks');
+    current = join(current, parts[index]!);
+    if (!(await lstat(current)).isSymbolicLink()) continue;
+    let linkText = '';
+    if (process.platform === 'darwin') {
+      try { linkText = await readlink(current); } catch { fail('workspace_symlink', 'Workspace paths must not contain symlinks'); }
+    }
+    const alias = process.platform === 'darwin' ? darwinSystemAlias(current, linkText) : undefined;
+    if (!alias) fail('workspace_symlink', 'Workspace paths must not contain symlinks');
+    await noSymlinks(join(alias, ...parts.slice(index + 1)), signal);
+    return;
   }
 }
 function gitEnvironment(): NodeJS.ProcessEnv {
