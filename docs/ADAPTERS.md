@@ -38,7 +38,7 @@ Applicability is technical verification, not semantic acceptance. Native tools h
 
 `HarnessAdapter` in `src/domain/types.ts` is the broader adapter contract: `id`, `health()`, and `execute(task, context)` returning an `AdapterResult`, with optional `preflight`, `verify`, `cancel`, and `close` lifecycle hooks. A new specialist adapter implements that interface and must be registered explicitly in trusted application code, with a matching validator in the registry loader and supported capability/permission declarations.
 
-A new process protocol implements `WorkerProtocol` and is explicitly connected to `ProcessWorkerAdapter` by trusted registration code. Extend the profile schema/adapter union and tests deliberately when introducing a new runtime. Task input and registry descriptions never supply executable adapter code. Arbitrary task-loaded plugins are not supported.
+A new process protocol implements `WorkerProtocol` and is explicitly connected to `ProcessWorkerAdapter` by trusted registration code. One-shot CLIs use `invocation` and `parse`. A bidirectional server also implements `stdioSession`. Extend the profile schema/adapter union and tests deliberately when introducing a new runtime. Task input and registry descriptions never supply executable adapter code. Arbitrary task-loaded plugins are not supported. See [writing an adapter](WRITING_AN_ADAPTER.md).
 
 ## Existing specialists
 

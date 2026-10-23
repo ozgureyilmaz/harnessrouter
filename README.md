@@ -10,7 +10,7 @@ local harnessrouter. your current agent hands a bounded task to codex, claude co
 
 ## features
 
-cross-harness workers: codex, claude code, opencode, and pi stay independent. mcp is the gateway.
+cross-harness workers: codex, claude code, opencode, and pi stay independent. mcp is the gateway. a codex profile can opt in to `codexTransport: "app-server"` and speak the stdio app server. the default remains `codex exec`. see [writing an adapter](docs/WRITING_AN_ADAPTER.md).
 
 route choice: a decision model picks the harness. local priority is the keyless default. pin a worker, or enable a hosted provider with `--selector decisions`.
 
@@ -206,6 +206,7 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [compatibility](docs/COMPATIBILITY.md)
 - [decision providers](docs/DECISION_PROVIDERS.md)
 - [adapters](docs/ADAPTERS.md)
+- [writing an adapter](docs/WRITING_AN_ADAPTER.md)
 - [performance](docs/PERFORMANCE.md)
 - [security and cost](docs/SECURITY_AND_COST.md)
 - [security](SECURITY.md)
