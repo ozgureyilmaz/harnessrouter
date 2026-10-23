@@ -91,6 +91,10 @@
       "type": "boolean",
       "default": false
     },
+    "async": {
+      "type": "boolean",
+      "description": "When true, route_task stores the run and returns immediately. The run is not cancelled if this request is aborted. The default waits for the worker."
+    },
     "workspace": {
       "type": "object",
       "additionalProperties": false,

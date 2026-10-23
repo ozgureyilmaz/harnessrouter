@@ -1,6 +1,6 @@
 import {spawn} from 'node:child_process';
 import {RouterError} from '../domain/errors.js';
-export interface ProcessOptions {cwd:string;env:NodeJS.ProcessEnv;signal?:AbortSignal;stdin?:string;timeoutMs?:number;maxBytes?:number;maxRecordBytes?:number;ndjson?:boolean;closeStdinOnEvent?:string;onRecord?:(record:Record<string,unknown>)=>void}
+export interface ProcessOptions {cwd:string;env:NodeJS.ProcessEnv;signal?:AbortSignal;stdin?:string;timeoutMs?:number;maxBytes?:number;maxRecordBytes?:number;ndjson?:boolean;closeStdinOnEvent?:string;onRecord?:(record:Record<string,unknown>)=>void;onServerRecord?:(record:Record<string,unknown>)=>string|undefined;onAbort?:()=>string|undefined}
 export interface ProcessOutput {stdout:string;records:Record<string,unknown>[];exitCode:number;stderrBytes:number}
 /** No shell, bounded output, finite lifetime, process-group cancellation. */
 export async function runProcess(command:string,args:readonly string[],options:ProcessOptions):Promise<ProcessOutput>{
@@ -14,7 +14,15 @@ export async function runProcess(command:string,args:readonly string[],options:P
     const groupAlive=()=>{if(!child.pid||process.platform==='win32')return false;try{process.kill(-child.pid,0);return true;}catch{return false;}};
     const stop=(error:Error)=>{if(failure)return;failure=error;kill('SIGTERM');escalation=setTimeout(()=>kill('SIGKILL'),500);};
     const timer=setTimeout(()=>stop(new RouterError('worker_timeout','Worker process exceeded its time limit')),options.timeoutMs??5000);
-    const abort=()=>stop(new RouterError('cancelled','Worker process cancelled'));
+    const abort=()=>{
+      if(failure)return;
+      let interrupt:string|undefined;
+      try{interrupt=options.onAbort?.();}catch(error){stop(error instanceof Error?error:new Error('Worker cancellation failed'));return;}
+      if(!interrupt){stop(new RouterError('cancelled','Worker process cancelled'));return;}
+      failure=new RouterError('cancelled','Worker process cancelled');
+      try{child.stdin.write(interrupt);}catch{/* The escalation below still stops the process. */}
+      escalation=setTimeout(()=>{kill('SIGTERM');escalation=setTimeout(()=>kill('SIGKILL'),500);},150);
+    };
     options.signal?.addEventListener('abort',abort,{once:true});if(options.signal?.aborted)abort();
     const cleanup=()=>{clearTimeout(timer);clearTimeout(escalation);options.signal?.removeEventListener('abort',abort);};
     const consume=(line:string)=>{
@@ -23,6 +31,7 @@ export async function runProcess(command:string,args:readonly string[],options:P
       let record:unknown;try{record=JSON.parse(line);}catch{throw new RouterError('worker_invalid_output','Worker emitted malformed JSON');}
       if(!record||typeof record!=='object'||Array.isArray(record))throw new RouterError('worker_invalid_output','Worker event must be a JSON object');
       records.push(record as Record<string,unknown>);options.onRecord?.(record as Record<string,unknown>);
+      if(options.onServerRecord){const extra=options.onServerRecord(record as Record<string,unknown>);if(extra)child.stdin.write(extra);}
       const event=record as Record<string,unknown>;
       if(options.closeStdinOnEvent&&(event.type===options.closeStdinOnEvent||(event.type==='response'&&event.success===false)))child.stdin.end();
     };
@@ -43,18 +52,20 @@ export async function runProcess(command:string,args:readonly string[],options:P
       kill('SIGTERM');
       if(groupAlive()){await new Promise(done=>setTimeout(done,500));kill('SIGKILL');await new Promise(done=>setTimeout(done,25));}
       cleanup();
+      try{if(options.ndjson&&buffer.trim())consume(buffer);}catch(error){reject(error);return;}
       if(failure){reject(failure);return;}
-      if(code!==0){reject(new RouterError('worker_exit_failed',`Worker exited unsuccessfully (code ${code??'signal'}); stderr bytes=${stderrBytes}`));return;}
-      try{if(options.ndjson&&buffer.trim())consume(buffer);resolve({stdout,records,exitCode:code,stderrBytes});}catch(error){reject(error);}
+      const reportedFailure=options.ndjson&&records.some(record=>record.type==='worker_error');
+      if(code!==0&&!reportedFailure){reject(new RouterError('worker_exit_failed',`Worker exited unsuccessfully (code ${code??'signal'}); stderr bytes=${stderrBytes}`));return;}
+      resolve({stdout,records,exitCode:code??0,stderrBytes});
     });
-    if(options.closeStdinOnEvent)child.stdin.write(options.stdin??'');else child.stdin.end(options.stdin??'');
+    if(options.closeStdinOnEvent||options.onServerRecord)child.stdin.write(options.stdin??'');else child.stdin.end(options.stdin??'');
   });
 }
 /** Native runtimes retain their own authentication stores. No arbitrary parent environment inheritance. */
 export function workerEnvironment():NodeJS.ProcessEnv{
   const env:NodeJS.ProcessEnv={};
   for(const key of ['PATH','HOME','USER','LOGNAME','TMPDIR','TMP','TEMP','SYSTEMROOT','WINDIR','XDG_DATA_HOME','XDG_STATE_HOME','CODEX_HOME','PI_CODING_AGENT_DIR',
-    'OPENAI_API_KEY','ANTHROPIC_API_KEY','GOOGLE_API_KEY','GEMINI_API_KEY','OPENROUTER_API_KEY'])if(process.env[key])env[key]=process.env[key];
+    'OPENAI_API_KEY','ANTHROPIC_API_KEY','GOOGLE_API_KEY','GEMINI_API_KEY','OPENROUTER_API_KEY','PI_LOCAL_API_KEY'])if(process.env[key])env[key]=process.env[key];
   env.GIT_CONFIG_NOSYSTEM='1';env.GIT_CONFIG_GLOBAL='/dev/null';env.GIT_CONFIG_SYSTEM='/dev/null';
   env.GIT_OPTIONAL_LOCKS='0';env.GIT_TERMINAL_PROMPT='0';
   env.NO_COLOR='1';env.HARNESSROUTER_WORKER='1';env.HARNESSROUTER_DELEGATION_DEPTH='1';

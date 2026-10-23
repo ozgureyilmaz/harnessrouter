@@ -4,7 +4,7 @@ harnessrouter keeps the host, router, independent runtime, and result verificati
 
 ## Process workers
 
-`src/workers/types.ts` defines `WorkerProfile` and `WorkerProtocol`. Local profiles specify `id`, `adapter`, `model`, `enabled`, and `allowExecution`; optional fields include `provider`, `executable`, `allowUnknownCost`, `priority`, `timeoutMs`, and `allowedModels` (explicit physical identifiers allowed for a configured alias). `executable` is a path or executable name, never a shell command. Pi uses the pinned SDK RPC bootstrap and rejects executable overrides.
+`src/workers/types.ts` defines `WorkerProfile` and `WorkerProtocol`. Local profiles specify `id`, `adapter`, `model`, `enabled`, and `allowExecution`; optional fields include `provider`, `executable`, `allowUnknownCost`, `priority`, `timeoutMs`, `description`, and `allowedModels` (explicit physical identifiers allowed for a configured alias). `executable` is a path or executable name, never a shell command. Pi uses the pinned SDK RPC bootstrap and rejects executable overrides. A missing Pi API key is returned as `WORKER_CREDENTIAL_MISSING` with the runtime's first error line. Pi accepts a loopback `baseUrl` (for example `http://127.0.0.1:11434/v1` for Ollama) together with `provider` and `model`. The router writes an isolated `models.json` for that run. Set `PI_LOCAL_API_KEY` when the server checks a key; otherwise the document uses the dummy key `local`.
 
 `WorkerProtocol` supplies:
 
@@ -14,17 +14,17 @@ harnessrouter keeps the host, router, independent runtime, and result verificati
 - `closeStdinOnEvent`: optional RPC terminal event that closes input only after completion.
 - `parse(records, profile)`: validated terminal completion, answer, session/model provenance, usage counters, and cost status.
 
-`ProcessWorkerAdapter` in `src/workers/adapter.ts` implements the shared `HarnessAdapter` interface. It verifies execution and unknown-cost permissions, acquires a per-profile lease, captures the workspace, invokes the native runtime through the process supervisor, records events, parses completion, and verifies workspace results. Leases are released on failure and cancellation. Workers receive a recursion marker and are instructed not to stage/commit or modify `.git`.
+`ProcessWorkerAdapter` in `src/workers/adapter.ts` implements the shared `HarnessAdapter` interface. It verifies execution and unknown-cost permissions, acquires a per-profile lease, captures the workspace, invokes the native runtime through the process supervisor, records events, parses completion, and verifies workspace results. The process group is killed before output collection settles, then the lease is released and the snapshot is deleted unless `keepSnapshots` is set. A lease whose owner process has exited is reclaimed by reconcile and the run is marked `interrupted`. Workers receive a recursion marker and are instructed not to stage/commit or modify `.git`.
 
 The supervisor uses argument vectors without a shell, strict output/time bounds, cancellation, and process cleanup. NDJSON events remain untrusted input. Incomplete streams, explicit runtime errors, absent final messages, and invalid terminal states fail. A runtime's reported model is retained only when the protocol actually supplies it; the configured model is not presented as an independently measured physical-model identity.
 
-The worker environment passes a bounded set of runtime paths and native/provider credentials. Supported provider variables are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`, and `OPENROUTER_API_KEY`; use only those required by your chosen provider. Native stores remain controlled by the runtime through `HOME`, `CODEX_HOME`, or `PI_CODING_AGENT_DIR` as applicable. harnessrouter does not read or copy their contents. `FAL_KEY` belongs to the image specialist and is not inherited by general workers.
+The worker environment passes a bounded set of runtime paths and native/provider credentials. Supported provider variables are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, and `PI_LOCAL_API_KEY`; use only those required by your chosen provider. Native stores remain controlled by the runtime through `HOME`, `CODEX_HOME`, or `PI_CODING_AGENT_DIR` as applicable. harnessrouter does not read or copy their contents. `FAL_KEY` belongs to the image specialist and is not inherited by general workers.
 
 Native account charges may remain unknown. Usage counters are provider-reported measurements; catalog rates and CLI cost fields do not establish an invoice. Local/profile and task authorization for unknown cost are both required.
 
 ## Workspace results
 
-`prepareWorkspace(request, runDirectory, policy)` and `collectPatch(snapshot, runDirectory)` in `src/workspace/snapshot.ts` implement the snapshot boundary. Only trusted policy roots grant access. Workspace roots must resolve to repository roots without symlink components; run storage must be outside the source repository. The run-directory parent must already exist.
+`prepareWorkspace(request, runDirectory, policy)` and `collectPatch(snapshot, runDirectory)` in `src/workspace/snapshot.ts` implement the snapshot boundary. Only trusted policy roots grant access. Workspace roots must resolve to repository roots without symlink components; run storage must be outside the source repository. The run-directory parent must already exist. macOS temp directories may cross `/tmp` or `/var` only when that component is the system alias for `/private/tmp` or `/private/var`.
 
 The baseline contains current tracked regular files plus explicitly included untracked files, excluding protected control/secret paths. Dirty edits are part of the baseline; pre-capture deletions remain absent. Limits default to 5,000 files and 32 MiB. Known secret names, inherited harness configuration, `.git`, hooks, and dependency directories are excluded. Unsafe relative paths, symlinks, and hardlinks fail closed.
 
@@ -38,13 +38,17 @@ Applicability is technical verification, not semantic acceptance. Native tools h
 
 `HarnessAdapter` in `src/domain/types.ts` is the broader adapter contract: `id`, `health()`, and `execute(task, context)` returning an `AdapterResult`, with optional `preflight`, `verify`, `cancel`, and `close` lifecycle hooks. A new specialist adapter implements that interface and must be registered explicitly in trusted application code, with a matching validator in the registry loader and supported capability/permission declarations.
 
-A new process protocol implements `WorkerProtocol` and is explicitly connected to `ProcessWorkerAdapter` by trusted registration code. Extend the profile schema/adapter union and tests deliberately when introducing a new runtime. Task input and registry descriptions never supply executable adapter code. Arbitrary task-loaded plugins are not supported.
+A new process protocol implements `WorkerProtocol` and is explicitly connected to `ProcessWorkerAdapter` by trusted registration code. One-shot CLIs use `invocation` and `parse`. A bidirectional server also implements `stdioSession`. Extend the profile schema/adapter union and tests deliberately when introducing a new runtime. Task input and registry descriptions never supply executable adapter code. Arbitrary task-loaded plugins are not supported. See [writing an adapter](WRITING_AN_ADAPTER.md).
 
 ## Existing specialists
 
 Pi browser remains a real RPC-controlled agent runtime with restricted isolated public-browser tools. Its public inspection/screenshot permissions differ from the general Pi workspace worker. fal-creative owns model-specific planning, validated generation parameters, admission and durable submission state, bounded recovery, and image verification; it is more than a prompt passthrough. Host defer returns control without silently running unsupported work.
 
 Host-managed composition uses a completed run's observations as input to a separate task and records `parentRunId` plus context fingerprint. It does not grant additional capabilities or spending authority. Historical specialist evidence is linked from the [README](../README.md); it does not establish live general-worker interoperability.
+
+## SDK and server protocols
+
+`docs/ADAPTER_INVESTIGATION.md` compares the current CLI workers with Codex App Server, the Claude Agent SDK, and the OpenCode server. The recommended first implementation is an opt-in Codex App Server adapter over stdio. This document does not add that adapter. The CLI workers remain the ones `ProcessWorkerAdapter` runs.
 
 ## Verification before adding a route
 

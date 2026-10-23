@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harnessrouter.local/contracts/get-run.schema.json",
+  "title": "get_run query",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "runId": {
+      "type": "string",
+      "description": "Router-issued run id."
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Caller task id. Resolves to the latest run for that id."
+    }
+  },
+  "anyOf": [
+    {"required": ["runId"]},
+    {"required": ["taskId"]}
+  ]
+}

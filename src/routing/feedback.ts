@@ -1,5 +1,7 @@
 import type {EligibleRoute} from '../registry/eligibility.js';
 import type {RoutePerformance} from '../observability/performance.js';
+import {localCandidatePool, localRoutePriority} from './local.js';
+import type {RouteProfile} from '../workers/route-profile.js';
 import type {WorkerProfile} from '../workers/types.js';
 
 export interface SelectionObservation {
@@ -57,10 +59,9 @@ function uniqueLowest(routes: readonly EligibleRoute[], compared: readonly Selec
  * Local priority still ranks first. Observations can separate only an equal top priority,
  * and only when every tied route has saved attempts for this task type.
  */
-export function applySelectionFeedback(candidates: readonly EligibleRoute[], profiles: readonly WorkerProfile[], observations: readonly SelectionObservation[] | undefined, taskType: string): {route?: EligibleRoute; feedback: SelectionFeedback} {
-  const specialists = candidates.filter((candidate) => candidate.harness.kind !== 'host_defer');
-  const pool = specialists.length ? specialists : [...candidates];
-  const ranked = pool.map((candidate) => ({candidate, priority: profiles.find((profile) => profile.id === candidate.harness.id)?.priority ?? 0})).sort((a, b) => b.priority - a.priority || a.candidate.route.id.localeCompare(b.candidate.route.id));
+export function applySelectionFeedback(candidates: readonly EligibleRoute[], profiles: readonly WorkerProfile[], observations: readonly SelectionObservation[] | undefined, taskType: string, routeProfiles: readonly RouteProfile[] = []): {route?: EligibleRoute; feedback: SelectionFeedback} {
+  const pool = localCandidatePool(candidates);
+  const ranked = pool.map((candidate) => ({candidate, priority: localRoutePriority(candidate, profiles, routeProfiles)})).sort((a, b) => b.priority - a.priority || a.candidate.route.id.localeCompare(b.candidate.route.id));
   const top = ranked[0]?.priority ?? 0;
   const tied = ranked.filter((item) => item.priority === top).map((item) => item.candidate);
   const compared = tied.map((candidate) => aggregate(candidate.route.id, taskType, observations ?? []));

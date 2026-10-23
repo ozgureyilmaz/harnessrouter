@@ -4,6 +4,8 @@ export interface HarnessTask {
   desiredOutput?: 'text'|'screenshot'|'image'|'video'|'mixed'|'patch'; maxCostUsd?: number;
   timeoutMs?: number; allowPaidExecution?: boolean; parentRunId?: string;
   preferredRouteId?: string; allowUnknownCost?: boolean;
+  /** Return once the run is stored and let it finish in the background. Omitted means wait. */
+  async?: boolean;
   workspace?: import('../workspace/types.js').WorkspaceRequest;
 }
 export interface Route {
@@ -62,13 +64,15 @@ export interface BenchmarkUsageSummary {
 }
 export interface HarnessResult {
   schemaVersion: '1.1'|'1.2'|'1.3'; runId: string; taskId: string;
-  status: 'completed'|'failed'|'rejected'|'defer_to_host'|'permission_required'|'cancelled';
+  status: 'completed'|'failed'|'rejected'|'defer_to_host'|'permission_required'|'cancelled'|'interrupted';
   selectedRouteId: string|null; selectedHarnessId?: string|null; selectedModelId?: string|null;
   summary?: string; structuredOutput?: Record<string, unknown>; artifacts: Artifact[];
   criterionResults: CriterionResult[];
   timing: {totalMs: number; decisionMs?: number; handoffMs?: number; executionMs?: number; verificationMs?: number};
   cost: Cost; usage?: UsageRecord[]; costComponents?: CostComponent[];
   error?: {code: string; message: string; retryable?: boolean}; tracePath?: string;
+  /** Tracked paths left out of the worker snapshot. `paths` is capped; `count` is the full total. */
+  workspaceExclusions?: {count: number; paths: string[]};
 }
 export interface CriterionResult {
   criterion: string;
@@ -83,6 +87,7 @@ export interface AdapterResult {
   usage?: UsageRecord[]; costComponents?: CostComponent[];
   timing?: {handoffMs?: number; executionMs?: number; verificationMs?: number};
   error?: HarnessResult['error'];
+  workspaceExclusions?: HarnessResult['workspaceExclusions'];
 }
 export interface TraceSink {event(type: string, data?: unknown): Promise<void>}
 export interface Budget {
@@ -94,6 +99,17 @@ export interface ExecutionContext {
   runId: string; routeId: string; route: Route; modelProfileId?: string;
   budgetUsd: number; signal: AbortSignal; artifactsDir: string;
   trace: TraceSink; budget: Budget;
+  /** Present only when the selected route is a named route profile. */
+  profile?: {
+    id: string;
+    permissions: 'read-only' | 'patch';
+    systemInstructions?: string;
+    enabledTools: readonly string[];
+    model: string;
+    allowedMcpServers: readonly string[];
+  };
+  /** Worker stages used by MCP progress notifications. */
+  setStage?: (stage: 'executing' | 'collecting') => void;
 }
 export interface HarnessAdapter {
   id: string; health(options?: {signal?: AbortSignal}): Promise<Health>;

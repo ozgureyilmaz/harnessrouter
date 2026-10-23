@@ -14,6 +14,7 @@ import type {EligibleRoute} from '../../src/registry/eligibility.js';
 import type {SelectionObservation} from '../../src/routing/feedback.js';
 import type {DecisionSelector} from '../../src/routing/decision-provider.js';
 import type {HarnessAdapter, HarnessResult, HarnessTask} from '../../src/domain/types.js';
+import type {RouteProfile} from '../../src/workers/route-profile.js';
 import type {WorkerProfile} from '../../src/workers/types.js';
 
 const worker = (id: string, priority = 0): WorkerProfile => ({id, adapter: 'codex', model: 'fixture', enabled: true, allowExecution: true, allowUnknownCost: true, priority});
@@ -63,6 +64,30 @@ test('saved observations separate only an equal top priority', () => {
   const ranked = applySelectionFeedback([fast, slow], [worker('fast-worker', 1), worker('slow-worker', 0)], undefined, 'review');
   assert.equal(ranked.route?.route.id, 'fast-worker:configured');
   assert.equal(ranked.feedback.reason, 'priority_decided');
+});
+
+test('selection feedback ranks named route profiles and leaves the configured route out', () => {
+  const review = candidate('codex-main:review');
+  const configured = candidate('codex-main:configured');
+  const other = candidate('other-worker:configured');
+  const profiles = [worker('codex-main', 0), worker('other-worker', 0)];
+  const raised: RouteProfile[] = [{id: 'review', harness: 'codex-main', permissions: 'read-only', allowedMcpServers: [], priority: 5}];
+  const history = [observation('codex-main:configured', 4, 4, 10, 10), observation('other-worker:configured', 4, 0, 10, 10)];
+  const decided = applySelectionFeedback([review, configured, other], profiles, history, 'review', raised);
+  assert.equal(decided.route?.route.id, 'codex-main:review');
+  assert.equal(decided.feedback.applied, false);
+  assert.equal(decided.feedback.reason, 'priority_decided');
+  assert.equal(decided.feedback.compared.some(row => row.routeId === 'codex-main:configured'), false);
+  const tied: RouteProfile[] = [{id: 'review', harness: 'codex-main', permissions: 'read-only', allowedMcpServers: []}];
+  const tiedHistory = [observation('codex-main:review', 4, 4, 100, 20), observation('other-worker:configured', 4, 1, 50, 10)];
+  const winner = applySelectionFeedback([review, configured, other], profiles, tiedHistory, 'review', tied);
+  assert.equal(winner.route?.route.id, 'codex-main:review');
+  assert.equal(winner.feedback.applied, true);
+  assert.equal(winner.feedback.reason, 'observation_winner');
+  const lower: RouteProfile[] = [{id: 'review', harness: 'codex-main', permissions: 'read-only', allowedMcpServers: [], priority: 1}];
+  const workerWins = applySelectionFeedback([review, other], profiles.map(profile => profile.id === 'other-worker' ? {...profile, priority: 10} : profile), undefined, 'review', lower);
+  assert.equal(workerWins.route?.route.id, 'other-worker:configured');
+  assert.equal(workerWins.feedback.reason, 'priority_decided');
 });
 
 test('selection feedback config is off unless set to a boolean', async t => {
