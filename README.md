@@ -16,6 +16,8 @@ route choice: a decision model picks the harness. local priority is the keyless 
 
 isolated work: the worker gets a git snapshot. edits return as a patch. your repository is not changed for you.
 
+tool pass-through: a worker profile can name local MCP servers in `mcpServers`. nothing is passed until that list is set. traces keep the server names, and a worker cannot start harnessrouter. see [tool pass-through](docs/TOOL_PASSTHROUGH.md).
+
 inspectable runs: `list_harnesses`, `route_task`, `get_run`, and `cancel_run`.
 
 ## how it works
@@ -220,6 +222,7 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [route profiles](docs/ROUTE_PROFILES.md)
 - [host guidance](docs/HOST_GUIDANCE.md)
 - [adapters](docs/ADAPTERS.md)
+- [tool pass-through](docs/TOOL_PASSTHROUGH.md)
 - [performance](docs/PERFORMANCE.md)
 - [security and cost](docs/SECURITY_AND_COST.md)
 - [security](SECURITY.md)
