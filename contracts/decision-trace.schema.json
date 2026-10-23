@@ -100,6 +100,34 @@
     "reason": {
       "type": "string"
     },
+    "selectionFeedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "applied", "reason", "taskType", "compared"],
+      "properties": {
+        "enabled": {"const": true},
+        "applied": {"type": "boolean"},
+        "reason": {"enum": ["priority_decided", "observation_winner", "no_observation_winner", "observation_tie", "observations_unavailable", "hosted_selector_unchanged"]},
+        "taskType": {"type": "string"},
+        "selectedRouteId": {"type": "string"},
+        "compared": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["routeId", "taskType", "attempts", "completed", "medianTotalMs", "medianTotalTokens"],
+            "properties": {
+              "routeId": {"type": "string"},
+              "taskType": {"type": "string"},
+              "attempts": {"type": "integer", "minimum": 0},
+              "completed": {"type": "integer", "minimum": 0},
+              "medianTotalMs": {"type": ["number", "null"], "minimum": 0},
+              "medianTotalTokens": {"type": ["number", "null"], "minimum": 0}
+            }
+          }
+        }
+      }
+    },
     "decisionProvider": {
       "enum": [
         "openai",

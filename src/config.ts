@@ -15,7 +15,7 @@ export interface RouterConfig {
   decisionProvider?:'openai'|'jev'|'ollaya'; jevApiKey?:string; ollayaApiKey?:string; ollayaBaseUrl?:string; decisionReserveUsd?:number;
   piTaskTimeoutMs:number; falTaskTimeoutMs:number;
   imageRoute:'auto'|'fast'|'quality';allowedDomains:string[];artifactsDir:string;registryPath:string;
-  selector?:'local'|'decisions';workerProfiles?:WorkerProfile[];routeProfiles?:RouteProfile[];workspaceRoots?:string[];
+  selector?:'local'|'decisions';selectionFeedback?:boolean;workerProfiles?:WorkerProfile[];routeProfiles?:RouteProfile[];workspaceRoots?:string[];
   allowExecution?:boolean;configPath?:string;
   /** Keep isolated workspace copies after a run. Default is to delete them. */
   keepSnapshots?:boolean;
@@ -30,7 +30,7 @@ function readSettings(path:string,required=false):Record<string,unknown>{
   try{
     const value=JSON.parse(readFileSync(path,'utf8'));
     if(!value||typeof value!=='object'||Array.isArray(value))throw new Error();
-    const allowed=new Set(['selector','workerProfiles','routeProfiles','workspaceRoots','allowExecution','dryRun','allowPaid','perTaskUsd','sessionUsd','allowedDomains','artifactsDir','registryPath','imageRoute','decisionProvider','decisionModel','decisionTimeoutMs','decisionReserveUsd','ollayaBaseUrl','keepSnapshots','snapshotExclude','snapshotInclude']);
+    const allowed=new Set(['selector','selectionFeedback','workerProfiles','routeProfiles','workspaceRoots','allowExecution','dryRun','allowPaid','perTaskUsd','sessionUsd','allowedDomains','artifactsDir','registryPath','imageRoute','decisionProvider','decisionModel','decisionTimeoutMs','decisionReserveUsd','ollayaBaseUrl','keepSnapshots','snapshotExclude','snapshotInclude']);
     if(Object.keys(value).some(key=>!allowed.has(key)))throw new Error();
     return value;
   }catch{throw new RouterError('invalid_config','Configuration must be a JSON object with supported settings and no credentials');}
@@ -108,7 +108,7 @@ export function loadConfig(options:ConfigOptions={}):RouterConfig {
     allowedDomains:domains.map(x=>x.trim().toLowerCase()).filter(Boolean),
     artifactsDir:resolve(cwd,String(env.ARTIFACTS_DIR??settings.artifactsDir??stateRoot)),
     registryPath:resolve(cwd,String(env.HARNESSROUTER_REGISTRY??settings.registryPath??join(PROJECT_ROOT,'config','harness-registry.yaml'))),
-    selector,workerProfiles:parseWorkerProfiles(settings.workerProfiles),routeProfiles:parseRouteProfiles(settings.routeProfiles,parseWorkerProfiles(settings.workerProfiles)),workspaceRoots:workspaceRoots as string[],
+    selector,selectionFeedback:flag('ROUTER_SELECTION_FEEDBACK','selectionFeedback',false),workerProfiles:parseWorkerProfiles(settings.workerProfiles),routeProfiles:parseRouteProfiles(settings.routeProfiles,parseWorkerProfiles(settings.workerProfiles)),workspaceRoots:workspaceRoots as string[],
     keepSnapshots:flag('HARNESSROUTER_KEEP_SNAPSHOTS','keepSnapshots',false),
     ...(patterns('snapshotExclude')?{snapshotExclude:patterns('snapshotExclude')}:{}),
     ...(patterns('snapshotInclude')?{snapshotInclude:patterns('snapshotInclude')}:{}),

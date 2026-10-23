@@ -163,7 +163,7 @@ harnessrouter prune --older-than 7d --config ./harnessrouter.config.json
 harnessrouter prune --dry-run --config ./harnessrouter.config.json
 ```
 
-`stats` reads saved runs. sorting does not change routing. see [performance](docs/PERFORMANCE.md).
+`stats` reads saved runs. Display order stays a display choice. Routing uses those measurements only when `selectionFeedback` is on, which defaults to off. see [performance](docs/PERFORMANCE.md).
 
 `reconcile` also runs when the server starts and before a worker lease is taken. a lease whose process is gone, or that belongs to another machine or boot, becomes `interrupted`. the lease is released and that run's snapshot is deleted. a live process is left alone. a second task for that profile gets `worker_busy`. `worker_reconciliation_required` stays only when the lease cannot be classified safely.
 

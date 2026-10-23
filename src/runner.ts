@@ -213,23 +213,44 @@ export class HarnessRouter {
         validateResult(nativeResult);await trace.save('decision.json',{...decisionTrace,decisionStatus:'not_required',reason:'host_control_defer_no_decision'});await trace.save('result.json',nativeResult);await trace.save('status.json',{runId,status:nativeResult.status});return nativeResult;
       }
       let chosen=options.eligible[0]!;
+      let feedbackApplied=false;
       if((this.config.selector??'decisions')!=='decisions'&&options.eligible.length>1){
-        const local=selectLocal(options.eligible,this.config.workerProfiles,this.config.routeProfiles);
-        if(!local){
-          result={schemaVersion:'1.3',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId:null,selectedHarnessId:null,selectedModelId:null,summary:'Several eligible routes have equal priority. Choose preferredRouteId or configure worker priorities.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing:{totalMs:performance.now()-trace.start},cost:{status:'not_applicable',usd:0},usage:[],costComponents:[],tracePath:trace.path};
-          await trace.save('decision.json',{...decisionTrace,decisionStatus:'not_required',reason:'local_priority_tie'});validateResult(result);await trace.save('result.json',result);await trace.save('status.json',{runId,status:result.status});return result;
+        if(this.config.selectionFeedback===true){
+          const {applySelectionFeedback,loadSelectionObservations,taskTypeFor}=await import('./routing/feedback.js');
+          const taskType=taskTypeFor(task.requirements);
+          const observations=await loadSelectionObservations(this.config.artifactsDir);
+          const choice=applySelectionFeedback(options.eligible,this.config.workerProfiles??[],observations,taskType,this.config.routeProfiles??[]);
+          decisionTrace.selectionFeedback=choice.feedback;
+          if(!choice.route){
+            result={schemaVersion:'1.3',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId:null,selectedHarnessId:null,selectedModelId:null,summary:'Several eligible routes have equal priority. Choose preferredRouteId or configure worker priorities.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing:{totalMs:performance.now()-trace.start},cost:{status:'not_applicable',usd:0},usage:[],costComponents:[],tracePath:trace.path};
+            const saved={...decisionTrace,decisionStatus:'not_required' as const,reason:'local_priority_tie'};
+            validateTrace(saved);await trace.save('decision.json',saved);validateResult(result);await trace.save('result.json',result);await trace.save('status.json',{runId,status:result.status});return result;
+          }
+          chosen=choice.route;options.eligible=[choice.route];feedbackApplied=choice.feedback.applied;
+        }else{
+          const local=selectLocal(options.eligible,this.config.workerProfiles,this.config.routeProfiles);
+          if(!local){
+            result={schemaVersion:'1.3',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId:null,selectedHarnessId:null,selectedModelId:null,summary:'Several eligible routes have equal priority. Choose preferredRouteId or configure worker priorities.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing:{totalMs:performance.now()-trace.start},cost:{status:'not_applicable',usd:0},usage:[],costComponents:[],tracePath:trace.path};
+            await trace.save('decision.json',{...decisionTrace,decisionStatus:'not_required',reason:'local_priority_tie'});validateResult(result);await trace.save('result.json',result);await trace.save('status.json',{runId,status:result.status});return result;
+          }
+          chosen=local;options.eligible=[local];
         }
-        chosen=local;options.eligible=[local];
       }
 
       if(options.eligible.length===1) {
         selectedRouteId=chosen.route.id;
         decisionTrace.decisionStatus='not_required';
         decisionTrace.selectedRouteId=selectedRouteId;
-        decisionTrace.reason='single_eligible_route';
+        decisionTrace.reason=feedbackApplied?'selection_feedback':'single_eligible_route';
         await trace.event('single_route_selected',{route:selectedRouteId});
       }else {
         decisionRequired=true;
+        if(this.config.selectionFeedback===true){
+          const {loadSelectionObservations,taskTypeFor}=await import('./routing/feedback.js');
+          const taskType=taskTypeFor(task.requirements);
+          const observations=await loadSelectionObservations(this.config.artifactsDir);
+          decisionTrace.selectionFeedback={enabled:true,applied:false,reason:observations===undefined?'observations_unavailable':'hosted_selector_unchanged',taskType,compared:(observations??[]).filter(row=>row.taskType===taskType&&options.eligible.some(candidate=>candidate.route.id===row.routeId))};
+        }
         decisionCost={status:'unknown',details:'A decision attempt may incur provider fees; inspect decision trace and budget ledger'};
         const selected=await this.decisions.choose(task,options.eligible.map(c=>({value:c.route.id,description:c.route.description})),signal,decisionTraceSink,budget);
         selectedRouteId=selected.routeId;timing.decisionMs=selected.latencyMs;decisionCost=selected.cost;

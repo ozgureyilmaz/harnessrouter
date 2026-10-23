@@ -17,7 +17,9 @@ From an MCP host, `list_harnesses({"includePerformance":true})` adds a bounded 2
 
 Rows expose route and model identity, completed/attempted counts, recorded criterion outcomes, measured latency, token coverage, and known/estimated USD subtotals. `configured` model identity means the runtime did not independently report a physical model. `unknown` and `mixed` identities remain visible. Missing task metadata has no invented distinct-case count.
 
-Ordering by `time` or `tokens` is a display choice. It does not change routing. Copy the chosen route ID into `preferredRouteId`, or set a trusted worker profile's `priority`. Policy and availability checks still apply; unavailable routes never become eligible because their historical numbers look good.
+Ordering by `time` or `tokens` is a display choice. That display order does not change routing. Copy the chosen route ID into `preferredRouteId`, or set a trusted worker profile's `priority`.
+
+`selectionFeedback` (config) or `ROUTER_SELECTION_FEEDBACK` can also read this report. It is off by default, so keyless local priority is unchanged until you set it to true. A strictly higher `priority` still wins. A named route profile uses its own priority when set, and the same worker's `configured` route stays out of the comparison. Equal top priorities can be separated by saved success rate, then median time, then median tokens, for that same task type, and only when every tied route has at least one saved attempt. Missing history is not treated as a score of zero. The decision trace records whether the observations changed the route. Hosted decision prompts are left unchanged. Policy and availability checks still apply; unavailable routes never become eligible because their historical numbers look good.
 
 ## Read the measurements correctly
 
