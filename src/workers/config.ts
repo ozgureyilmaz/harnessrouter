@@ -12,14 +12,19 @@ const schema = z.array(z.object({
   timeoutMs:z.number().int().min(1000).max(300000).optional(),
   allowedModels:z.array(z.string().min(1).max(100)).max(16).optional(),
   allowUnknownCost:z.boolean().optional(),provider:z.string().min(1).max(100).optional(),
+  codexTransport:z.enum(['cli','app-server']).optional(),
 }).partial({executable:true}).strict()).max(32);
 export function parseWorkerProfiles(value:unknown):WorkerProfile[]{
   const parsed=schema.safeParse(value??[]);
   if(!parsed.success)throw new RouterError('invalid_config','Invalid worker profiles: '+parsed.error.issues.map(i=>`${i.path.join('.')}: ${i.message}`).join('; '));
   const ids=new Set<string>();
+  const profiles:WorkerProfile[]=[];
   for(const profile of parsed.data){
     if(['native','pi-browser','fal-creative'].includes(profile.id)||ids.has(profile.id))throw new RouterError('invalid_config','Worker profile IDs must be unique and cannot replace specialist adapters');
+    if(profile.codexTransport&&profile.adapter!=='codex')throw new RouterError('invalid_config','codexTransport is only valid on a Codex worker');
     ids.add(profile.id);
+    const {codexTransport,...rest}=profile;
+    profiles.push(codexTransport==='app-server'?{...rest,codexTransport}:rest);
   }
-  return parsed.data;
+  return profiles;
 }

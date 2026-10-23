@@ -1,5 +1,6 @@
 import {normalizeUsageRecord} from '../observability/metering.js';
 import type {Cost, UsageRecord} from '../domain/types.js';
+import {CodexAppServerSession, parseCodexAppServer} from './codex-app-server.js';
 import type {WorkerProfile, WorkerProtocol} from './types.js';
 
 const str = (v: unknown): string | undefined => typeof v === 'string' && v.trim() ? v : undefined;
@@ -13,6 +14,7 @@ export const codexWorker: WorkerProtocol = {
   async invocation(profile: WorkerProfile, {cwd, prompt, mode, signal}) {
     signal?.throwIfAborted();
     if (!profile.model.trim()) throw new Error('Codex worker requires an explicit model');
+    if (profile.codexTransport === 'app-server') return {command: profile.executable ?? 'codex', args: ['app-server', '--listen', 'stdio://']};
     return {
       command: profile.executable ?? 'codex',
       args: ['exec', '--json', '--ignore-user-config', '--ephemeral', '--strict-config',
@@ -21,7 +23,12 @@ export const codexWorker: WorkerProtocol = {
       stdin: prompt,
     };
   },
+  stdioSession(profile, options) {
+    if (profile.codexTransport !== 'app-server') return undefined;
+    return new CodexAppServerSession(profile, options);
+  },
   parse(records: Record<string, unknown>[], profile: WorkerProfile) {
+    if (profile.codexTransport === 'app-server') return parseCodexAppServer(records, profile);
     let finalText: string | undefined;
     let model: string | undefined;
     let sessionId: string | undefined;
