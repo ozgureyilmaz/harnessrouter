@@ -4,7 +4,7 @@ harnessrouter keeps the host, router, independent runtime, and result verificati
 
 ## Process workers
 
-`src/workers/types.ts` defines `WorkerProfile` and `WorkerProtocol`. Local profiles specify `id`, `adapter`, `model`, `enabled`, and `allowExecution`; optional fields include `provider`, `executable`, `allowUnknownCost`, `priority`, `timeoutMs`, and `allowedModels` (explicit physical identifiers allowed for a configured alias). `executable` is a path or executable name, never a shell command. Pi uses the pinned SDK RPC bootstrap and rejects executable overrides.
+`src/workers/types.ts` defines `WorkerProfile` and `WorkerProtocol`. Local profiles specify `id`, `adapter`, `model`, `enabled`, and `allowExecution`; optional fields include `provider`, `executable`, `allowUnknownCost`, `priority`, `timeoutMs`, `description`, and `allowedModels` (explicit physical identifiers allowed for a configured alias). `executable` is a path or executable name, never a shell command. Pi uses the pinned SDK RPC bootstrap and rejects executable overrides. A missing Pi API key is returned as `WORKER_CREDENTIAL_MISSING` with the runtime's first error line. Pi accepts a loopback `baseUrl` (for example `http://127.0.0.1:11434/v1` for Ollama) together with `provider` and `model`. The router writes an isolated `models.json` for that run. Set `PI_LOCAL_API_KEY` when the server checks a key; otherwise the document uses the dummy key `local`.
 
 `WorkerProtocol` supplies:
 
@@ -18,7 +18,7 @@ harnessrouter keeps the host, router, independent runtime, and result verificati
 
 The supervisor uses argument vectors without a shell, strict output/time bounds, cancellation, and process cleanup. NDJSON events remain untrusted input. Incomplete streams, explicit runtime errors, absent final messages, and invalid terminal states fail. A runtime's reported model is retained only when the protocol actually supplies it; the configured model is not presented as an independently measured physical-model identity.
 
-The worker environment passes a bounded set of runtime paths and native/provider credentials. Supported provider variables are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`, and `OPENROUTER_API_KEY`; use only those required by your chosen provider. Native stores remain controlled by the runtime through `HOME`, `CODEX_HOME`, or `PI_CODING_AGENT_DIR` as applicable. harnessrouter does not read or copy their contents. `FAL_KEY` belongs to the image specialist and is not inherited by general workers.
+The worker environment passes a bounded set of runtime paths and native/provider credentials. Supported provider variables are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, and `PI_LOCAL_API_KEY`; use only those required by your chosen provider. Native stores remain controlled by the runtime through `HOME`, `CODEX_HOME`, or `PI_CODING_AGENT_DIR` as applicable. harnessrouter does not read or copy their contents. `FAL_KEY` belongs to the image specialist and is not inherited by general workers.
 
 Native account charges may remain unknown. Usage counters are provider-reported measurements; catalog rates and CLI cost fields do not establish an invoice. Local/profile and task authorization for unknown cost are both required.
 

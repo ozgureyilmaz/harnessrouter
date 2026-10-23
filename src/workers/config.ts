@@ -2,6 +2,7 @@ import {isAbsolute} from 'node:path';
 import {z} from 'zod';
 import type {WorkerProfile} from './types.js';
 import {RouterError} from '../domain/errors.js';
+import {validatePiBaseUrl} from './pi-local.js';
 const schema = z.array(z.object({
   id:z.string().regex(/^[a-z][a-z0-9-]{0,63}$/),
   adapter:z.enum(['codex','claude-code','opencode','pi']),
@@ -12,6 +13,8 @@ const schema = z.array(z.object({
   timeoutMs:z.number().int().min(1000).max(300000).optional(),
   allowedModels:z.array(z.string().min(1).max(100)).max(16).optional(),
   allowUnknownCost:z.boolean().optional(),provider:z.string().min(1).max(100).optional(),
+  baseUrl:z.string().min(1).max(300).optional(),
+  description:z.string().min(1).max(200).regex(/^[^\u0000-\u001f\u007f]+$/).optional(),
 }).partial({executable:true}).strict()).max(32);
 export function parseWorkerProfiles(value:unknown):WorkerProfile[]{
   const parsed=schema.safeParse(value??[]);
@@ -19,6 +22,11 @@ export function parseWorkerProfiles(value:unknown):WorkerProfile[]{
   const ids=new Set<string>();
   for(const profile of parsed.data){
     if(['native','pi-browser','fal-creative'].includes(profile.id)||ids.has(profile.id))throw new RouterError('invalid_config','Worker profile IDs must be unique and cannot replace specialist adapters');
+    if(profile.baseUrl){
+      if(profile.adapter!=='pi')throw new RouterError('invalid_config','baseUrl is only supported for the Pi adapter');
+      if(!profile.provider)throw new RouterError('invalid_config','Pi baseUrl requires provider');
+      profile.baseUrl=validatePiBaseUrl(profile.baseUrl);
+    }
     ids.add(profile.id);
   }
   return parsed.data;

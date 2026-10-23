@@ -42,6 +42,14 @@ test('runProcess rejects malformed and oversized NDJSON events', async () => {
   }), (error: {code?: string}) => error.code === 'worker_output_limit');
 });
 
+test('runProcess returns a Pi worker_error record from a nonzero exit', async () => {
+  const result = await runProcess(process.execPath, ['-e', `process.stdout.write(JSON.stringify({type:'worker_error', code:'PI_CREDENTIAL_MISSING', message:'No API key found for openai'})+'\\n'); process.exit(1)`], {
+    cwd: process.cwd(), env: processEnv, timeoutMs: 3000, ndjson: true,
+  });
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.records[0]?.code, 'PI_CREDENTIAL_MISSING');
+});
+
 test('runProcess rejects nonzero exits without exposing stderr content', async () => {
   const resultError = await runProcess(process.execPath, ['-e', `process.stderr.write('private-marker'); process.exit(7)`], {
     cwd: process.cwd(), env: processEnv, timeoutMs: 3000,

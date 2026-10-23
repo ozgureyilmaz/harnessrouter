@@ -2,7 +2,7 @@
 
 *one agent. many harnesses.*
 
-local harnessrouter. your current agent hands a bounded task to codex, claude code, opencode, pi, and more. a decision model picks the best harness for each task, runs it on an isolated git snapshot, and gives you back text or a patch to review.
+local harnessrouter. your current agent hands a bounded task to codex, claude code, opencode, pi, and more. the configured selector picks a harness, runs it on an isolated git snapshot, and gives you back text or a patch to review.
 
 [![CI](https://github.com/ozgureyilmaz/harnessrouter/workflows/Offline%20checks/badge.svg)](https://github.com/ozgureyilmaz/harnessrouter/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -35,7 +35,7 @@ flowchart LR
 
 the decision model step is whichever selector is configured, local priority rules by default or the hosted decision model when enabled with `--selector decisions`.
 
-a decision model chooses the harness for the task. the keyless default from `init` is local priority rules acting as that decision model: no provider call and no api key. equal top priorities defer to the host. `--selector decisions` or `--decision-provider` enables the hosted decision model. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. the provider returns a route id and does not choose the worker model. a bad id, or a provider error, stops the run instead of switching providers. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
+the keyless default from `init` is local priority. it ranks `workerProfiles.priority` and does not read the task text. equal top priorities defer to the host. `--selector decisions` or `--decision-provider` asks a hosted decision model to return a route id. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. ollaya's default is `laya:typed-decisions` on `POST http://127.0.0.1:11435/v1/systemone`; pull that model with `ollaya pull laya:typed-decisions` while `ollaya serve` is running. the provider does not choose the worker model. a bad id, a missing local model, or a provider error stops the run instead of switching providers. route descriptions distinguish a read-only review from a patch, so a local model can choose different harnesses. the sequence below shows one hosted review choice. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
 
 ```mermaid
 sequenceDiagram

@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Run snapshots and OpenCode isolation directories are deleted after the patch or text is saved.
 - Lease classification no longer depends on Linux `/proc` alone. macOS reads another process's start time from `ps` and its boot id from `kern.bootsessionuuid`. The router's own pid uses its process uptime.
 - Snapshot checks accept the macOS `/tmp` and `/var` system aliases and still reject every other symlink.
+- Ollaya HTTP errors keep a short sanitized provider message. A missing local model is `decision_model_unavailable`.
+- Pi reports a missing API key as `WORKER_CREDENTIAL_MISSING` and keeps the runtime's first error line. The bootstrap no longer replaces every failure with `PI_RUNTIME_FAILED`.
+- Built-in worker descriptions tell a review task from a patch task, so a local decision model can choose different harnesses. Pi can use a loopback OpenAI-compatible `baseUrl`.
 
 ### Added
 
