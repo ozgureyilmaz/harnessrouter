@@ -1,6 +1,12 @@
 import type {Cost, UsageRecord, Health} from '../domain/types.js';
 
 export type WorkerKind = 'codex' | 'claude-code' | 'opencode' | 'pi';
+/** One local stdio MCP server. No environment, URL, or headers. */
+export interface WorkerMcpServer {
+  name: string;
+  command: string;
+  args?: string[];
+}
 export interface WorkerProfile {
   id: string;
   adapter: WorkerKind;
@@ -16,6 +22,8 @@ export interface WorkerProfile {
   provider?: string;
   /** Physical model identifiers permitted when the configured model is an alias. */
   allowedModels?: string[];
+  /** Explicit stdio MCP servers. Omitted means none are forwarded. */
+  mcpServers?: WorkerMcpServer[];
 }
 export interface WorkerInvocation {
   command: string;

@@ -23,6 +23,7 @@ export const piProtocol: WorkerProtocol = {
   },
   async invocation(profile, options) {
     options.signal?.throwIfAborted();
+    if (profile.mcpServers?.length) throw new Error('WORKER_PROTOCOL_ERROR: Pi does not accept additional MCP servers');
     if (!profile.provider || profile.executable) throw new Error('WORKER_PROTOCOL_ERROR: Pi requires provider/model and pinned SDK bootstrap');
     const bootstrap = fileURLToPath(new URL('./pi-bootstrap.js', import.meta.url));
     const sourceMode = import.meta.url.endsWith('.ts');

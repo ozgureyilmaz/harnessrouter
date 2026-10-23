@@ -3,7 +3,8 @@ import {tmpdir, userInfo} from 'node:os';
 import {join, resolve} from 'node:path';
 import {runProcess, workerEnvironment} from './process.js';
 import {normalizeUsageRecord} from '../observability/metering.js';
-import type {WorkerCompletion, WorkerProfile, WorkerProtocol} from './types.js';
+import {openCodeMcp} from './mcp-allowlist.js';
+import type {WorkerCompletion, WorkerMcpServer, WorkerProfile, WorkerProtocol} from './types.js';
 
 function object(value: unknown): Record<string, unknown> {return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};}
 function counter(value: unknown): number|undefined {return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;}
@@ -58,7 +59,7 @@ export async function assertOpenCodeSnapshot(cwd: string, signal?: AbortSignal):
   signal?.throwIfAborted();
 }
 
-export async function prepareOpenCodeIsolation(runDirectory: string, cwd: string, mode: 'read-only'|'patch', signal?: AbortSignal): Promise<NodeJS.ProcessEnv> {
+export async function prepareOpenCodeIsolation(runDirectory: string, cwd: string, mode: 'read-only'|'patch', signal?: AbortSignal, servers?: readonly WorkerMcpServer[]): Promise<NodeJS.ProcessEnv> {
   signal?.throwIfAborted();
   const root = resolve(runDirectory);
   const config = join(root, 'opencode-config', 'opencode');
@@ -74,7 +75,7 @@ export async function prepareOpenCodeIsolation(runDirectory: string, cwd: string
     XDG_CONFIG_HOME: join(root, 'opencode-config'), XDG_CACHE_HOME: join(root, 'opencode-cache'), XDG_STATE_HOME: join(root, 'opencode-state'),
     OPENCODE_CONFIG_DIR: config, OPENCODE_TEST_HOME: join(root, 'opencode-home'),
     OPENCODE_DB: join(root, 'opencode-isolated.db'), // no native account/organization or resumed session state
-    OPENCODE_CONFIG_CONTENT: JSON.stringify({$schema: 'https://opencode.ai/config.json', autoupdate: false, share: 'disabled', plugin: [], mcp: {}, instructions: [], lsp: false, formatter: false, permission: openCodePermissions(cwd, mode)}),
+    OPENCODE_CONFIG_CONTENT: JSON.stringify({$schema: 'https://opencode.ai/config.json', autoupdate: false, share: 'disabled', plugin: [], mcp: openCodeMcp(servers), instructions: [], lsp: false, formatter: false, permission: openCodePermissions(cwd, mode)}),
     OPENCODE_PERMISSION: JSON.stringify(openCodePermissions(cwd, mode)),
     OPENCODE_DISABLE_PROJECT_CONFIG: '1', OPENCODE_PURE: '1', OPENCODE_DISABLE_DEFAULT_PLUGINS: '1',
     OPENCODE_DISABLE_AUTOUPDATE: '1', OPENCODE_DISABLE_MODELS_FETCH: '1', OPENCODE_DISABLE_AUTOCOMPACT: '1',
@@ -118,7 +119,7 @@ export const openCodeProtocol: WorkerProtocol = {
     await assertNoOpenCodeManagedConfig(options.signal);
     await assertOpenCodeSnapshot(options.cwd, options.signal);
     options.signal?.throwIfAborted();
-    const env = await prepareOpenCodeIsolation(options.runDirectory, options.cwd, options.mode, options.signal);
+    const env = await prepareOpenCodeIsolation(options.runDirectory, options.cwd, options.mode, options.signal, profile.mcpServers);
     await checkOpenCodeMetadata(profile.executable ?? 'opencode', options.cwd, {...workerEnvironment(), ...env}, options.signal);
     options.signal?.throwIfAborted();
     return {command: profile.executable ?? 'opencode', args: ['run', '--format', 'json', '--pure', '--model', profile.model, '--dir', options.cwd], env, stdin: options.prompt};
