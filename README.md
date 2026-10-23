@@ -222,6 +222,7 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [route profiles](docs/ROUTE_PROFILES.md)
 - [host guidance](docs/HOST_GUIDANCE.md)
 - [adapters](docs/ADAPTERS.md)
+- [adapter investigation](docs/ADAPTER_INVESTIGATION.md)
 - [tool pass-through](docs/TOOL_PASSTHROUGH.md)
 - [performance](docs/PERFORMANCE.md)
 - [security and cost](docs/SECURITY_AND_COST.md)
