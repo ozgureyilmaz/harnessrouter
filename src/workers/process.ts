@@ -52,9 +52,11 @@ export async function runProcess(command:string,args:readonly string[],options:P
       kill('SIGTERM');
       if(groupAlive()){await new Promise(done=>setTimeout(done,500));kill('SIGKILL');await new Promise(done=>setTimeout(done,25));}
       cleanup();
+      try{if(options.ndjson&&buffer.trim())consume(buffer);}catch(error){reject(error);return;}
       if(failure){reject(failure);return;}
-      if(code!==0){reject(new RouterError('worker_exit_failed',`Worker exited unsuccessfully (code ${code??'signal'}); stderr bytes=${stderrBytes}`));return;}
-      try{if(options.ndjson&&buffer.trim())consume(buffer);resolve({stdout,records,exitCode:code,stderrBytes});}catch(error){reject(error);}
+      const reportedFailure=options.ndjson&&records.some(record=>record.type==='worker_error');
+      if(code!==0&&!reportedFailure){reject(new RouterError('worker_exit_failed',`Worker exited unsuccessfully (code ${code??'signal'}); stderr bytes=${stderrBytes}`));return;}
+      resolve({stdout,records,exitCode:code??0,stderrBytes});
     });
     if(options.closeStdinOnEvent||options.onServerRecord)child.stdin.write(options.stdin??'');else child.stdin.end(options.stdin??'');
   });
@@ -63,7 +65,7 @@ export async function runProcess(command:string,args:readonly string[],options:P
 export function workerEnvironment():NodeJS.ProcessEnv{
   const env:NodeJS.ProcessEnv={};
   for(const key of ['PATH','HOME','USER','LOGNAME','TMPDIR','TMP','TEMP','SYSTEMROOT','WINDIR','XDG_DATA_HOME','XDG_STATE_HOME','CODEX_HOME','PI_CODING_AGENT_DIR',
-    'OPENAI_API_KEY','ANTHROPIC_API_KEY','GOOGLE_API_KEY','GEMINI_API_KEY','OPENROUTER_API_KEY'])if(process.env[key])env[key]=process.env[key];
+    'OPENAI_API_KEY','ANTHROPIC_API_KEY','GOOGLE_API_KEY','GEMINI_API_KEY','OPENROUTER_API_KEY','PI_LOCAL_API_KEY'])if(process.env[key])env[key]=process.env[key];
   env.GIT_CONFIG_NOSYSTEM='1';env.GIT_CONFIG_GLOBAL='/dev/null';env.GIT_CONFIG_SYSTEM='/dev/null';
   env.GIT_OPTIONAL_LOCKS='0';env.GIT_TERMINAL_PROMPT='0';
   env.NO_COLOR='1';env.HARNESSROUTER_WORKER='1';env.HARNESSROUTER_DELEGATION_DEPTH='1';

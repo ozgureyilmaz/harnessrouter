@@ -4,6 +4,10 @@ import {chmod, mkdtemp, mkdir, readFile, realpath, rm, stat, symlink, writeFile}
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {piProtocol} from '../../src/workers/pi.js';
+import {piBootstrapFailure} from '../../src/workers/pi-errors.js';
+import {piLocalModelDocument, validatePiBaseUrl} from '../../src/workers/pi-local.js';
+import {parseWorkerProfiles} from '../../src/workers/config.js';
+import {workerManifests} from '../../src/workers/registry.js';
 import {assertOpenCodeAuthMetadata, assertOpenCodeSnapshot, openCodePermissions, openCodeProtocol, prepareOpenCodeIsolation} from '../../src/workers/opencode.js';
 import {guardedPiPath, isolatedPiResourceLoader, isolatedPiTools} from '../../src/workers/pi-bootstrap.js';
 import type {WorkerProfile} from '../../src/workers/types.js';
@@ -21,6 +25,13 @@ test('mocked Pi native completion requires terminal event, model binding and nor
   assert.throws(() => piProtocol.parse([acknowledgement, {...records[1], message: {...assistant, model: 'other'}}, records[2]!], pi), /model/);
   assert.throws(() => piProtocol.parse([acknowledgement, {...records[1], message: {...assistant, stopReason: 'error'}}, records[2]!], pi), /did not complete/);
   assert.throws(() => piProtocol.parse([{type: 'worker_error'}, ...records], pi), /runtime/);
+  assert.throws(() => piProtocol.parse([{type: 'response', id: 'task', command: 'prompt', success: false, error: 'No API key found for openai.\n\nUse /login and see /secret/providers.md'}, ...records], pi), (error: unknown) => {
+    assert.equal((error as {code?: string}).code, 'credential_missing');
+    assert.match((error as Error).message, /Pi has no API key for provider "fixture-provider". No API key found for openai\./);
+    assert.equal((error as Error).message.includes('/secret/providers.md'), false);
+    return true;
+  });
+  assert.throws(() => piProtocol.parse([{type: 'worker_error', code: 'PI_RUNTIME_FAILED', message: 'provider failed Bearer sk-secretvalue123456 token'}], pi), (error: unknown) => error instanceof Error && error.message.includes('[REDACTED]') && !error.message.includes('sk-secretvalue123456'));
   assert.throws(() => piProtocol.parse(records.slice(1), pi), /RPC prompt response/);
   assert.throws(() => piProtocol.parse([{...acknowledgement, id: 'wrong'}, ...records.slice(1)], pi), /RPC prompt response/);
   assert.throws(() => piProtocol.parse([{...acknowledgement, success: false}, ...records.slice(1)], pi), /runtime/);
@@ -109,6 +120,42 @@ test('dry-run OpenCode isolation retains native auth location without native acc
     await assert.rejects(assertOpenCodeSnapshot(snapshot), /symlink/);
     await assert.rejects(assertOpenCodeSnapshot('/bad*path'), /permission path/);
   } finally {await chmod(join(root, 'opencode-config', 'opencode'), 0o700).catch(() => {}); await rm(root, {recursive: true, force: true});}
+});
+
+test('Pi bootstrap failures keep the cause and drop secret-bearing tails', () => {
+  const missing = piBootstrapFailure(new Error('No API key found for openai.\n\nUse /login'));
+  assert.equal(missing.code, 'PI_CREDENTIAL_MISSING');
+  assert.match(missing.message, /No API key found for openai/);
+  assert.equal(missing.message.includes('Use /login'), false);
+  const secret = piBootstrapFailure(new Error('request failed Bearer sk-secretvalue123456'));
+  assert.equal(secret.message.includes('sk-secretvalue123456'), false);
+  assert.match(secret.message, /\[REDACTED\]/);
+});
+
+test('Pi loopback model document stays on localhost and does not store a real key', () => {
+  assert.equal(validatePiBaseUrl('http://127.0.0.1:11434/v1'), 'http://127.0.0.1:11434/v1');
+  assert.throws(() => validatePiBaseUrl('http://example.com/v1'), /127\.0\.0\.1/);
+  const previous = process.env.PI_LOCAL_API_KEY;
+  delete process.env.PI_LOCAL_API_KEY;
+  try {
+    const document = piLocalModelDocument({provider: 'ollama', model: 'qwen2.5:0.5b', baseUrl: 'http://127.0.0.1:11434/v1'});
+    assert.equal(JSON.stringify(document).includes('sk-'), false);
+    assert.match(JSON.stringify(document), /"apiKey":"local"/);
+    process.env.PI_LOCAL_API_KEY = 'fixture-local-key';
+    const referenced = piLocalModelDocument({provider: 'ollama', model: 'qwen2.5:0.5b', baseUrl: 'http://127.0.0.1:11434/v1'});
+    assert.match(JSON.stringify(referenced), /\$PI_LOCAL_API_KEY/);
+    assert.equal(JSON.stringify(referenced).includes('fixture-local-key'), false);
+  } finally {if (previous === undefined) delete process.env.PI_LOCAL_API_KEY; else process.env.PI_LOCAL_API_KEY = previous;}
+  const descriptions = Object.fromEntries(['codex', 'claude-code', 'opencode', 'pi'].map((adapter) => {
+    const manifest = workerManifests([{id: `${adapter}-worker`, adapter: adapter as WorkerProfile['adapter'], enabled: true, allowExecution: true, model: 'm', provider: 'p'}])[0]!;
+    return [adapter, manifest.routes[0]!.description];
+  }));
+  assert.notEqual(descriptions.codex, descriptions['claude-code']);
+  assert.match(descriptions['claude-code'], /not to edit/);
+  assert.match(descriptions.codex, /patch/);
+  const accepted = parseWorkerProfiles([{id: 'pi-local', adapter: 'pi', model: 'qwen2.5:0.5b', provider: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1/'}]);
+  assert.equal(accepted[0]?.baseUrl, 'http://127.0.0.1:11434/v1');
+  assert.throws(() => parseWorkerProfiles([{id: 'codex-local', adapter: 'codex', model: 'm', baseUrl: 'http://127.0.0.1:9'}]), /Pi adapter/);
 });
 
 test('offline Pi probe resolves the pinned ESM-only SDK without CommonJS require',async()=>{

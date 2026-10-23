@@ -6,6 +6,7 @@ import {parse} from 'dotenv';
 import {RouterError} from './domain/errors.js';
 import {parseImageRoutePreference} from './routing/image-route.js';
 import {parseWorkerProfiles} from './workers/config.js';
+import {parseRouteProfiles, type RouteProfile} from './workers/route-profile.js';
 import type {WorkerProfile} from './workers/types.js';
 export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export interface RouterConfig {
@@ -14,8 +15,14 @@ export interface RouterConfig {
   decisionProvider?:'openai'|'jev'|'ollaya'; jevApiKey?:string; ollayaApiKey?:string; ollayaBaseUrl?:string; decisionReserveUsd?:number;
   piTaskTimeoutMs:number; falTaskTimeoutMs:number;
   imageRoute:'auto'|'fast'|'quality';allowedDomains:string[];artifactsDir:string;registryPath:string;
-  selector?:'local'|'decisions';workerProfiles?:WorkerProfile[];workspaceRoots?:string[];
+  selector?:'local'|'decisions';workerProfiles?:WorkerProfile[];routeProfiles?:RouteProfile[];workspaceRoots?:string[];
   allowExecution?:boolean;configPath?:string;
+  /** Keep isolated workspace copies after a run. Default is to delete them. */
+  keepSnapshots?:boolean;
+  /** Extra snapshot globs. `include` cannot put `.git` back. */
+  snapshotExclude?:string[];snapshotInclude?:string[];
+  /** MCP progress interval. Defaults to 12s. Tests may set a shorter value. */
+  progressIntervalMs?:number;
 }
 export interface ConfigOptions {cwd?:string;configPath?:string;overrides?:Partial<RouterConfig>;env?:NodeJS.ProcessEnv}
 function readSettings(path:string,required=false):Record<string,unknown>{
@@ -23,7 +30,7 @@ function readSettings(path:string,required=false):Record<string,unknown>{
   try{
     const value=JSON.parse(readFileSync(path,'utf8'));
     if(!value||typeof value!=='object'||Array.isArray(value))throw new Error();
-    const allowed=new Set(['selector','workerProfiles','workspaceRoots','allowExecution','dryRun','allowPaid','perTaskUsd','sessionUsd','allowedDomains','artifactsDir','registryPath','imageRoute','decisionProvider','decisionModel','decisionTimeoutMs','decisionReserveUsd','ollayaBaseUrl']);
+    const allowed=new Set(['selector','workerProfiles','routeProfiles','workspaceRoots','allowExecution','dryRun','allowPaid','perTaskUsd','sessionUsd','allowedDomains','artifactsDir','registryPath','imageRoute','decisionProvider','decisionModel','decisionTimeoutMs','decisionReserveUsd','ollayaBaseUrl','keepSnapshots','snapshotExclude','snapshotInclude']);
     if(Object.keys(value).some(key=>!allowed.has(key)))throw new Error();
     return value;
   }catch{throw new RouterError('invalid_config','Configuration must be a JSON object with supported settings and no credentials');}
@@ -78,6 +85,12 @@ export function loadConfig(options:ConfigOptions={}):RouterConfig {
   const ollayaBaseUrl=typeof ollayaRaw==='string'&&ollayaRaw.trim()?validateOllayaBaseUrl(ollayaRaw):decisionProvider==='ollaya'?'http://127.0.0.1:11435':undefined;
   const workspaceRoots=settings.workspaceRoots??[];
   if(!Array.isArray(workspaceRoots)||workspaceRoots.some(x=>typeof x!=='string'||!isAbsolute(x)))throw new RouterError('invalid_config','workspaceRoots must contain absolute paths');
+  const patterns=(key:string)=>{
+    const value=settings[key];
+    if(value===undefined)return undefined;
+    if(!Array.isArray(value)||value.some(item=>typeof item!=='string'||item.length<1||item.length>200||item.includes('\0')))throw new RouterError('invalid_config',`${key} must be a list of glob patterns`);
+    return value as string[];
+  };
   const domains=env.BROWSER_ALLOWED_DOMAINS!==undefined?env.BROWSER_ALLOWED_DOMAINS.split(','):settings.allowedDomains??['example.com'];
   if(!Array.isArray(domains)||domains.some(x=>typeof x!=='string'))throw new RouterError('invalid_config','allowedDomains must be strings');
   const stateRoot=join(processEnv.XDG_STATE_HOME??join(homedir(),'.local','state'),'harnessrouter');
@@ -95,7 +108,10 @@ export function loadConfig(options:ConfigOptions={}):RouterConfig {
     allowedDomains:domains.map(x=>x.trim().toLowerCase()).filter(Boolean),
     artifactsDir:resolve(cwd,String(env.ARTIFACTS_DIR??settings.artifactsDir??stateRoot)),
     registryPath:resolve(cwd,String(env.HARNESSROUTER_REGISTRY??settings.registryPath??join(PROJECT_ROOT,'config','harness-registry.yaml'))),
-    selector,workerProfiles:parseWorkerProfiles(settings.workerProfiles),workspaceRoots:workspaceRoots as string[],
+    selector,workerProfiles:parseWorkerProfiles(settings.workerProfiles),routeProfiles:parseRouteProfiles(settings.routeProfiles,parseWorkerProfiles(settings.workerProfiles)),workspaceRoots:workspaceRoots as string[],
+    keepSnapshots:flag('HARNESSROUTER_KEEP_SNAPSHOTS','keepSnapshots',false),
+    ...(patterns('snapshotExclude')?{snapshotExclude:patterns('snapshotExclude')}:{}),
+    ...(patterns('snapshotInclude')?{snapshotInclude:patterns('snapshotInclude')}:{}),
     ...(configPath?{configPath:resolve(cwd,configPath)}:{}),
   };
   const merged={...config,...options.overrides};

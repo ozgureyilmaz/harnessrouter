@@ -107,6 +107,31 @@ test('loopback-only fixture Ollaya uses optional auth, typed model default and n
   assert.equal(calls, 1);
 });
 
+test('loopback-only fixtures keep a short JSON provider error and hide raw bodies', async () => {
+  await fixture((_req, res) => {
+    res.statusCode = 404;
+    res.end(JSON.stringify({error: 'model "missing-model:latest" not found, try pulling it first', code: 'MODEL_NOT_FOUND', detail: 'fixture-sensitive-body'}));
+  }, async (baseUrl) => {
+    const client = new SystemOneDecisionsClient({provider: 'ollaya', baseUrl, allowPaid: false, dryRun: false});
+    await assert.rejects(client.choose(task, choices, signal(), trace().sink, new FakeBudget()), (error: unknown) => {
+      assert.ok(error instanceof RouterError);
+      assert.equal(error.code, 'decision_model_unavailable');
+      assert.match(error.message, /not installed/);
+      assert.match(error.message, /\. Provider message: /);
+      assert.match(error.message, /missing-model:latest/);
+      assert.equal(error.message.includes('fixture-sensitive-body'), false);
+      return true;
+    });
+  });
+  await fixture((_req, res) => {
+    res.statusCode = 422;
+    res.end(JSON.stringify({error: 'state: Field required', code: 'INVALID_REQUEST'}));
+  }, async (baseUrl) => {
+    const client = new SystemOneDecisionsClient({provider: 'ollaya', baseUrl, allowPaid: false, dryRun: false});
+    await assert.rejects(client.choose(task, choices, signal(), trace().sink, new FakeBudget()), (error: unknown) => error instanceof RouterError && error.code === 'invalid_request' && error.message.includes('state: Field required'));
+  });
+});
+
 test('loopback-only fixtures reject redirects, 413/422, oversized and malformed bodies without retries or error leakage', async () => {
   for (const mode of ['redirect', '413', '422', 'size', 'malformed']) {
     let calls = 0;

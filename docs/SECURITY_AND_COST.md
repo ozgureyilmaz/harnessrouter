@@ -6,6 +6,7 @@
 - Pi browser extensions are executable third-party code; inspect package provenance, source, dependencies, telemetry and requested privileges before installation.
 - Running a user Chrome profile may expose credentials; use a fresh isolated profile for public-page runs.
 - MCP receives powerful task instructions from host; validate URLs/permissions and ensure it cannot trigger arbitrary commands based on a manifest.
+- Worker MCP pass-through defaults to an empty allowlist. A configured `mcpServers` command runs with the worker and is not wrapped in a second sandbox. Inline secrets are rejected, traces store names and command basenames, and a worker cannot start harnessrouter. See [tool pass-through](TOOL_PASSTHROUGH.md).
 - fal keys and OpenAI keys are financial credentials; never leak to logs, artifacts, prompts, browser environment or commits.
 - Media artifact URLs may be public or temporary; avoid sensitive user content and do not assume permanence.
 

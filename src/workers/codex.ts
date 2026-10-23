@@ -1,6 +1,7 @@
 import {normalizeUsageRecord} from '../observability/metering.js';
 import type {Cost, UsageRecord} from '../domain/types.js';
 import {CodexAppServerSession, parseCodexAppServer} from './codex-app-server.js';
+import {codexMcpServersArg} from './mcp-allowlist.js';
 import type {WorkerProfile, WorkerProtocol} from './types.js';
 
 const str = (v: unknown): string | undefined => typeof v === 'string' && v.trim() ? v : undefined;
@@ -19,7 +20,7 @@ export const codexWorker: WorkerProtocol = {
       command: profile.executable ?? 'codex',
       args: ['exec', '--json', '--ignore-user-config', '--ephemeral', '--strict-config',
         '--sandbox', mode === 'patch' ? 'workspace-write' : 'read-only', '--model', profile.model,
-        '-C', cwd, '-c', 'mcp_servers={}', '-c', 'features.multi_agent=false', '-'],
+        '-C', cwd, '-c', codexMcpServersArg(profile.mcpServers), '-c', 'features.multi_agent=false', '-'],
       stdin: prompt,
     };
   },

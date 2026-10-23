@@ -16,7 +16,7 @@ Implement `WorkerProtocol` in `src/workers/types.ts` and register it in `src/wor
 
 A one-shot CLI fills `invocation` and `parse`. `invocation` returns an argv and optional stdin. `parse` reads the JSON records and fails closed on a missing terminal event.
 
-A bidirectional server fills `stdioSession` as well. The session's `opening` is the first stdin payload. `respond` answers one server record. `interrupt` is written on cancellation, and the supervisor still kills the process if it does not exit. Return a `failure` instead of approving a request you did not expect. The Codex App Server session in `src/workers/codex-app-server.ts` is the example: `codexTransport: "app-server"` opts in, and an omitted transport stays `codex exec`. That CLI path still passes `--ignore-user-config` and `mcp_servers={}`. The app-server argv is only `app-server --listen stdio://`, so a Codex config under `CODEX_HOME` can still load. The opt-in is not a second closed default.
+A bidirectional server fills `stdioSession` as well. The session's `opening` is the first stdin payload. `respond` answers one server record. `interrupt` is written on cancellation, and the supervisor still kills the process if it does not exit. Return a `failure` instead of approving a request you did not expect. The Codex App Server session in `src/workers/codex-app-server.ts` is the example: `codexTransport: "app-server"` opts in, and an omitted transport stays `codex exec`. That CLI path still passes `--ignore-user-config`. It passes `mcp_servers={}` until the profile sets `mcpServers`. The app-server argv is only `app-server --listen stdio://`. It does not forward `mcpServers` or route-profile `allowedMcpServers`. A route profile still supplies the model, the read-only or patch mode, and the prompt. A Codex config under `CODEX_HOME` can still load. The opt-in is not a second closed default.
 
 ## Rules that stay in place
 
@@ -26,4 +26,4 @@ A bidirectional server fills `stdioSession` as well. The session's `opening` is 
 - Workers already have `HARNESSROUTER_WORKER=1`. Do not spawn another harnessrouter.
 - CI uses a fake subprocess. A live CLI run is a separate, explicit check.
 
-MCP progress notifications from the run-lifecycle work are not on this branch. Record server records with the existing `worker.raw_event` trace. Connecting those events to MCP progress waits until that work is merged.
+A synchronous `route_task` already emits MCP progress for `validating`, `selecting`, `executing`, and `collecting`. Record server records with `worker.raw_event`. Feeding those records into the progress notification is separate from the protocol.
