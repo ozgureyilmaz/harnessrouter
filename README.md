@@ -51,7 +51,7 @@ sequenceDiagram
     R-->>U: Return the result
 ```
 
-the same `taskId` returns a finished run. if a call times out, use `get_run` before sending that task again.
+the same `taskId` returns a finished `completed` or `failed` run. a synchronous `route_task` sends progress every few seconds when the host asked for it, so a host that resets its timeout on progress can wait out a long worker. pass `"async": true` to get `{runId, taskId, status: "running"}` immediately. that run keeps going if the request is cancelled. `get_run` accepts `runId` or `taskId`. a `cancelled` or `interrupted` task id can be sent again. the earlier run stays on disk.
 
 ## requirements
 
@@ -151,9 +151,17 @@ hosts are `codex`, `claude-code`, `opencode`, and `pi`. reload the host after yo
 harnessrouter doctor --config ./harnessrouter.config.json
 harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort time
 harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort tokens --json
+harnessrouter reconcile --config ./harnessrouter.config.json
+harnessrouter reconcile --dry-run --config ./harnessrouter.config.json
+harnessrouter prune --older-than 7d --config ./harnessrouter.config.json
+harnessrouter prune --dry-run --config ./harnessrouter.config.json
 ```
 
 `stats` reads saved runs. sorting does not change routing. see [performance](docs/PERFORMANCE.md).
+
+`reconcile` also runs when the server starts and before a worker lease is taken. a lease whose process is gone, or that belongs to another machine or boot, becomes `interrupted`. the lease is released and that run's snapshot is deleted. a live process is left alone. a second task for that profile gets `worker_busy`. `worker_reconciliation_required` stays only when the lease cannot be classified safely.
+
+`prune` deletes run directories older than the cutoff. the default is 7 days. it skips a run whose lease is still live. each run deletes its snapshot after the patch or text is saved. set `"keepSnapshots": true` or `HARNESSROUTER_KEEP_SNAPSHOTS=1` to keep snapshots for debugging. `snapshotExclude` and `snapshotInclude` add basename or path globs. an include never puts `.git` back into the snapshot.
 
 ### with your agent
 
@@ -182,7 +190,7 @@ a read-only `route_task` looks like this. the route id is the profile id plus `:
 }
 ```
 
-for an edit, use `requirements` `["coding"]`, `desiredOutput` `"patch"`, and `workspace.mode` `"patch"`. you review the patch before applying it. known secret names, `.git`, and dependency directories stay out of the snapshot. see [security](SECURITY.md) and [adapters](docs/ADAPTERS.md).
+for an edit, use `requirements` `["coding"]`, `desiredOutput` `"patch"`, and `workspace.mode` `"patch"`. you review the patch before applying it. the snapshot drops control directories by exact name (`.git`, `node_modules`, `.husky`, and the router state directories) and secret files by exact name or basename glob (`.env*` other than `.env.example` and `.env.sample`, keys, cloud credentials, and terraform state). a directory named `hooks`, `auth`, `tokens`, or `secrets` is copied. the run result lists what was left out. see [security](SECURITY.md) and [adapters](docs/ADAPTERS.md).
 
 a source checkout can also turn on a pi browser route and a fal image route. they stay off until you opt in. [compatibility](docs/COMPATIBILITY.md).
 

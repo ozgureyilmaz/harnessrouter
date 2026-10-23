@@ -14,7 +14,7 @@ harnessrouter keeps the host, router, independent runtime, and result verificati
 - `closeStdinOnEvent`: optional RPC terminal event that closes input only after completion.
 - `parse(records, profile)`: validated terminal completion, answer, session/model provenance, usage counters, and cost status.
 
-`ProcessWorkerAdapter` in `src/workers/adapter.ts` implements the shared `HarnessAdapter` interface. It verifies execution and unknown-cost permissions, acquires a per-profile lease, captures the workspace, invokes the native runtime through the process supervisor, records events, parses completion, and verifies workspace results. Leases are released on failure and cancellation. Workers receive a recursion marker and are instructed not to stage/commit or modify `.git`.
+`ProcessWorkerAdapter` in `src/workers/adapter.ts` implements the shared `HarnessAdapter` interface. It verifies execution and unknown-cost permissions, acquires a per-profile lease, captures the workspace, invokes the native runtime through the process supervisor, records events, parses completion, and verifies workspace results. The process group is killed before output collection settles, then the lease is released and the snapshot is deleted unless `keepSnapshots` is set. A lease whose owner process has exited is reclaimed by reconcile and the run is marked `interrupted`. Workers receive a recursion marker and are instructed not to stage/commit or modify `.git`.
 
 The supervisor uses argument vectors without a shell, strict output/time bounds, cancellation, and process cleanup. NDJSON events remain untrusted input. Incomplete streams, explicit runtime errors, absent final messages, and invalid terminal states fail. A runtime's reported model is retained only when the protocol actually supplies it; the configured model is not presented as an independently measured physical-model identity.
 
@@ -24,7 +24,7 @@ Native account charges may remain unknown. Usage counters are provider-reported 
 
 ## Workspace results
 
-`prepareWorkspace(request, runDirectory, policy)` and `collectPatch(snapshot, runDirectory)` in `src/workspace/snapshot.ts` implement the snapshot boundary. Only trusted policy roots grant access. Workspace roots must resolve to repository roots without symlink components; run storage must be outside the source repository. The run-directory parent must already exist.
+`prepareWorkspace(request, runDirectory, policy)` and `collectPatch(snapshot, runDirectory)` in `src/workspace/snapshot.ts` implement the snapshot boundary. Only trusted policy roots grant access. Workspace roots must resolve to repository roots without symlink components; run storage must be outside the source repository. The run-directory parent must already exist. macOS temp directories may cross `/tmp` or `/var` only when that component is the system alias for `/private/tmp` or `/private/var`.
 
 The baseline contains current tracked regular files plus explicitly included untracked files, excluding protected control/secret paths. Dirty edits are part of the baseline; pre-capture deletions remain absent. Limits default to 5,000 files and 32 MiB. Known secret names, inherited harness configuration, `.git`, hooks, and dependency directories are excluded. Unsafe relative paths, symlinks, and hardlinks fail closed.
 
