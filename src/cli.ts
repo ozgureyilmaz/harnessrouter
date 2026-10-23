@@ -1,21 +1,27 @@
 import {chmod, mkdir, writeFile} from 'node:fs/promises';
 import {readFileSync} from 'node:fs';
+import {createInterface} from 'node:readline';
 import {homedir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {PROJECT_ROOT, loadConfig} from './config.js';
+import {hostGuidanceDocument} from './mcp/guidance.js';
 import {generateHostConfig, type McpHost} from './mcp/host-config.js';
 import {runProcess} from './workers/process.js';
 import type {WorkerKind, WorkerProfile, WorkerProtocol} from './workers/types.js';
 
 const HOSTS: McpHost[] = ['codex', 'claude-code', 'opencode', 'pi'];
-const HELP = `harnessrouter [serve] [--config PATH]\n\nharnessrouter init [--scope user|local] [--selector local|decisions] [--decision-provider openai|jev|ollaya] [--config PATH]\nharnessrouter doctor [--config PATH]\nharnessrouter stats [--sort time|tokens] [--task-type TYPE] [--limit N] [--json] [--config PATH]\nharnessrouter reconcile [--dry-run] [--config PATH]\nharnessrouter prune [--older-than 7d] [--dry-run] [--config PATH]\nharnessrouter mcp-config --host codex|claude-code|opencode|pi [--config PATH]\n\nserve is the default command. init writes a disabled starter with selector local, so routing needs no decision API key. Pass --selector decisions or --decision-provider to opt into a decision provider. mcp-config prints a snippet and never edits host configuration.\nreconcile marks runs whose worker process is gone as interrupted and releases those leases. prune removes run directories older than the cutoff and never removes a run with a live lease.\n`;
+const HELP = `harnessrouter [serve] [--config PATH]\n\nharnessrouter init [--scope user|local] [--selector local|decisions] [--decision-provider openai|jev|ollaya] [--config PATH]\nharnessrouter doctor [--config PATH]\nharnessrouter stats [--sort time|tokens] [--task-type TYPE] [--limit N] [--json] [--config PATH]\nharnessrouter reconcile [--dry-run] [--config PATH]\nharnessrouter prune [--older-than 7d] [--dry-run] [--config PATH]\nharnessrouter mcp-config --host codex|claude-code|opencode|pi [--config PATH]\n\nserve is the default command. init writes a disabled starter with selector local, so routing needs no decision API key. Pass --selector decisions or --decision-provider to opt into a decision provider. init also writes AGENTS.md in the current directory when that file is absent. An existing AGENTS.md is replaced only after an interactive yes; otherwise the snippet is printed and the file is left unchanged. mcp-config prints a snippet and never edits host configuration.\nreconcile marks runs whose worker process is gone as interrupted and releases those leases. prune removes run directories older than the cutoff and never removes a run with a live lease.\n`;
 
 export interface CliIO {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   stdout?: (text: string) => void;
   stderr?: (text: string) => void;
+  /** When set, overrides terminal detection for the AGENTS.md overwrite prompt. */
+  interactive?: boolean;
+  /** Answer the AGENTS.md overwrite prompt. Used by interactive init and tests. */
+  confirm?: (question: string) => boolean | Promise<boolean>;
 }
 interface Parsed {command: 'serve'|'init'|'doctor'|'mcp-config'|'stats'|'reconcile'|'prune'|'help'|'version'; json?:boolean;sortBy?:'time'|'tokens';taskType?:string;limit?:number; configPath?: string; host?: McpHost; scope?: 'user'|'local';selector?:'local'|'decisions';decisionProvider?:'openai'|'jev'|'ollaya'; dryRun?: boolean; olderThan?: string}
 
@@ -110,6 +116,47 @@ function starterSettings(selector: 'local'|'decisions', provider: 'openai'|'jev'
     decisionReserveUsd: provider === 'ollaya' ? 0 : 0.01,
     ...gates,
   };
+}
+
+function hostGuidanceInteractive(io: CliIO): boolean {
+  if (typeof io.interactive === 'boolean') return io.interactive;
+  if (io.confirm) return true;
+  if (io.stdout || io.stderr) return false;
+  return process.stdin.isTTY === true;
+}
+
+function promptYes(question: string): Promise<boolean> {
+  const rl = createInterface({input: process.stdin, output: process.stdout});
+  return new Promise(resolve => {
+    rl.question(question, answer => {
+      rl.close();
+      resolve(/^(?:y|yes)$/i.test(answer.trim()));
+    });
+  });
+}
+
+/** Write AGENTS.md when absent. An existing file is replaced only after an interactive yes. */
+async function publishHostGuidance(cwd: string, io: CliIO, out: (text: string) => void): Promise<void> {
+  const target = join(cwd, 'AGENTS.md');
+  const snippet = hostGuidanceDocument();
+  try {
+    await writeFile(target, snippet, {encoding: 'utf8', mode: 0o644, flag: 'wx'});
+    out(`Wrote host guidance: ${target}\n`);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  }
+  if (hostGuidanceInteractive(io)) {
+    const replace = await (io.confirm ?? promptYes)(`AGENTS.md already exists at ${target}. Overwrite it? [y/N] `);
+    if (replace) {
+      await writeFile(target, snippet, {encoding: 'utf8', mode: 0o644});
+      out(`Replaced host guidance: ${target}\n`);
+      return;
+    }
+    out(`Left existing host guidance unchanged: ${target}\n`);
+    return;
+  }
+  out(`Left existing host guidance unchanged: ${target}\n${snippet}`);
 }
 
 function isSupportedNode(): boolean {
@@ -226,6 +273,7 @@ export async function runCli(args: string[], io: CliIO = {}): Promise<number> {
         ? 'Selector is local: routing uses configured priority and does not call a decision provider or need an API key.\nOpt in with --selector decisions and optionally --decision-provider openai|jev|ollaya.\n'
         : `Selector is decisions with provider ${provider}. A hosted provider needs its API key, paid authorization, and execution permission before live selection.\n`;
       out(`Created disabled starter configuration: ${target}\n${selectorNote}Dry run stays on, execution stays off, and paid calls stay off.\nEdit model names, workspaceRoots, and profile authorization before enabling workers.\n`);
+      await publishHostGuidance(cwd, io, out);
       return 0;
     }
     if (parsed.command === 'mcp-config') {

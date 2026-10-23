@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `harnessrouter reconcile [--dry-run]`.
 - `harnessrouter prune [--older-than 7d] [--dry-run]`.
 - Config `keepSnapshots` (default false), plus optional `snapshotExclude` and `snapshotInclude`.
+- MCP server instructions and tool descriptions are a short cookbook: when to call `route_task`, and when not to. The longer safety rules live in [host guidance](docs/HOST_GUIDANCE.md).
+- `harnessrouter init` writes `AGENTS.md` in the current directory when the file is absent. An existing file is replaced only after an interactive yes. A non-interactive run prints the snippet and leaves the file.
 
 ## [1.0.0] - Unreleased
 

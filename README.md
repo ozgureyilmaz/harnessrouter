@@ -123,6 +123,8 @@ harnessrouter doctor --config ./harnessrouter.config.json
 
 `init` writes `selector: "local"`. local priority rules act as the decision model, so this path needs no api key and does not call a provider. dry run stays on, execution stays off, and paid calls stay off until you change them. a worker can spend its own subscription or api account, and the usd amount may be unknown, so each task sets `allowUnknownCost` to true.
 
+`init` also writes `AGENTS.md` in the current directory when that file is absent. the file tells a host agent when to call `route_task`. if `AGENTS.md` already exists, an interactive terminal asks before replacing it. a non-interactive run leaves the file and prints the snippet. see [host guidance](docs/HOST_GUIDANCE.md).
+
 enable the hosted decision model when you create the file. openai is the default provider. jev and ollaya are the others:
 
 ```bash
@@ -213,6 +215,7 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [architecture](docs/ARCHITECTURE.md)
 - [compatibility](docs/COMPATIBILITY.md)
 - [decision providers](docs/DECISION_PROVIDERS.md)
+- [host guidance](docs/HOST_GUIDANCE.md)
 - [adapters](docs/ADAPTERS.md)
 - [performance](docs/PERFORMANCE.md)
 - [security and cost](docs/SECURITY_AND_COST.md)
