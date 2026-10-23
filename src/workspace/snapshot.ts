@@ -1,13 +1,35 @@
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile, chmod} from 'node:fs/promises';
+import {lstat, mkdir, mkdtemp, readdir, readFile, readlink, realpath, rm, writeFile, chmod} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 import {RouterError} from '../domain/errors.js';
 import type {WorkspacePatch, WorkspacePolicy, WorkspaceRequest, WorkspaceSnapshot} from './types.js';
 
 type Entry = {path: string; bytes: Buffer; executable: boolean};
-type State = {root: string; runDirectory: string; commit: string; fingerprint: string; baseline: Entry[]; gitFingerprint: string; maxFiles: number; maxBytes: number; mode: WorkspaceRequest['mode']};
+type SnapshotFilter = Pick<WorkspacePolicy, 'exclude' | 'include'>;
+type State = {root: string; runDirectory: string; commit: string; fingerprint: string; baseline: Entry[]; gitFingerprint: string; maxFiles: number; maxBytes: number; mode: WorkspaceRequest['mode']; filter: SnapshotFilter};
+const EXCLUSION_LIST_CAP = 50;
+/**
+ * Control directories match by exact path segment. A name that merely contains
+ * "auth", "token", "secret", or "hooks" is ordinary source and stays in the snapshot.
+ * Git hooks are only `.git/hooks` (already covered by `.git`) and `.husky`.
+ */
+const CONTROL_DIRECTORIES = new Set([
+  '.git', '.harnessrouter', 'node_modules', '.claude', '.pi', '.codex', '.opencode', '.cursor', '.agents',
+  '.ssh', '.aws', '.azure', '.gnupg', '.husky', '.config',
+]);
+/**
+ * Secret and instruction files match the basename, or a basename glob.
+ * `.env.example` and `.env.sample` are templates and stay in the snapshot.
+ */
+const EXACT_SECRET_BASENAMES = new Set([
+  '.mcp.json', 'mcp.json', '.claude.json', 'opencode.json', 'opencode.jsonc', '.opencode.json', '.opencode.jsonc',
+  '.cursorrules', '.clinerules', '.windsurfrules', 'system.md', 'claude.md', 'gemini.md',
+  '.npmrc', '.netrc', '.pypirc', '.gitconfig', '.gitmodules', '.gitattributes', '.gitignore',
+  '.dev.vars', '.pgpass', '.htpasswd', '.yarnrc.yml', 'terraform.tfstate', 'terraform.tfstate.backup',
+  'credentials.json', 'credentials', '.credentials', 'secrets.json', '.secrets',
+]);
 // Kept outside the worker-accessible filesystem: workers cannot replace their own baseline.
 const states = new WeakMap<WorkspaceSnapshot, State>();
 const hash = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
@@ -17,22 +39,89 @@ const inside = (root: string, child: string) => child === root || (!relative(roo
 function safePath(path: string): void {
   if (!path || isAbsolute(path) || /^[a-z]:/i.test(path) || path.includes('\\') || path.includes('\0') || path.split('/').some(part => !part || part === '.' || part === '..')) fail('workspace_path_unsafe', 'Workspace paths must be safe relative file paths');
 }
-export function protectedWorkspacePath(path: string): boolean {
-  return path.split('/').some(part => {
-    const name = part.toLowerCase();
-    return ['.git', '.harnessrouter', 'node_modules', '.claude', '.pi', '.codex', '.opencode', '.cursor', '.agents', '.ssh', '.aws', '.azure', '.gnupg', 'hooks', '.hooks', '.husky', '.config', '.mcp.json', 'mcp.json', '.claude.json', 'opencode.json', 'opencode.jsonc', '.opencode.json', '.opencode.jsonc', '.cursorrules', '.clinerules', '.windsurfrules', 'system.md', 'claude.md', 'agents.md', 'gemini.md', '.npmrc', '.netrc', '.pypirc', '.gitconfig', '.gitmodules', '.gitattributes', '.gitignore'].includes(name)
-      || name.startsWith('.env') || /(?:^|[._-])(?:credentials?|secrets?|auth|tokens?)(?:[._-]|$)/i.test(name)
-      || /\.(?:pem|key|p12|pfx|keystore)$/i.test(name) || /^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.|$)/i.test(name);
-  });
+function normalizeRelative(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+function basenameOf(path: string): string {
+  const parts = normalizeRelative(path).split('/');
+  return parts[parts.length - 1] ?? '';
+}
+/** `*` stays inside one segment. `**` may cross `/`. */
+function matchesUserPattern(pattern: string, path: string): boolean {
+  const normalized = normalizeRelative(pattern);
+  let expression = '^';
+  for (let index = 0; index < normalized.length; index++) {
+    const char = normalized[index]!;
+    if (char === '*') {
+      if (normalized[index + 1] === '*') {
+        expression += '.*';
+        index += 1;
+        if (normalized[index + 1] === '/') index += 1;
+      } else expression += '[^/]*';
+    } else if ('\\^$+?.()|{}[]'.includes(char)) expression += `\\${char}`;
+    else expression += char;
+  }
+  const regex = new RegExp(`${expression}$`, 'i');
+  if (regex.test(path)) return true;
+  return !normalized.includes('/') && regex.test(basenameOf(path));
+}
+function secretBasename(name: string): boolean {
+  const lower = name.toLowerCase();
+  if (EXACT_SECRET_BASENAMES.has(lower)) return true;
+  if (lower.startsWith('.env') && lower !== '.env.example' && lower !== '.env.sample') return true;
+  if (lower.endsWith('.tfvars')) return true;
+  if (/^service-account.*\.json$/i.test(name)) return true;
+  if (/-adminsdk.*\.json$/i.test(name)) return true;
+  if (/^gcp-key.*\.json$/i.test(name)) return true;
+  if (/\.(?:pem|key|p12|pfx|keystore)$/i.test(name)) return true;
+  if (/^id_(?:rsa|dsa|ecdsa|ed25519)/i.test(name)) return true;
+  return false;
+}
+function builtinProtected(path: string): boolean {
+  const normalized = normalizeRelative(path);
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.some(part => CONTROL_DIRECTORIES.has(part.toLowerCase()))) return true;
+  const lower = normalized.toLowerCase();
+  // `.git` already covers `.git/hooks`. `.kube/config` and `.docker/config.json` are files, not whole trees.
+  if (lower === '.kube/config' || lower.endsWith('/.kube/config')) return true;
+  if (lower === '.docker/config.json' || lower.endsWith('/.docker/config.json')) return true;
+  return secretBasename(parts[parts.length - 1] ?? '');
+}
+export function protectedWorkspacePath(path: string, filter?: SnapshotFilter): boolean {
+  const normalized = normalizeRelative(path);
+  // Include can override a secret rule. It cannot put `.git` back into the snapshot.
+  if (normalized.split('/').some(part => part.toLowerCase() === '.git')) return true;
+  if (filter?.include?.some(pattern => matchesUserPattern(pattern, normalized))) return false;
+  if (builtinProtected(normalized)) return true;
+  return filter?.exclude?.some(pattern => matchesUserPattern(pattern, normalized)) ?? false;
+}
+/**
+ * macOS publishes `/tmp` and `/var` as symlinks to `/private/tmp` and `/private/var`.
+ * Those two aliases are the only links a workspace path may cross. The target must match exactly.
+ */
+export function darwinSystemAlias(linkPath: string, linkText: string): string | undefined {
+  const expected = linkPath === '/tmp' ? '/private/tmp' : linkPath === '/var' ? '/private/var' : undefined;
+  if (!expected) return undefined;
+  const resolved = isAbsolute(linkText) ? resolve(linkText) : resolve(dirname(linkPath), linkText);
+  return resolved === expected ? resolved : undefined;
 }
 async function noSymlinks(path: string, signal?: AbortSignal): Promise<void> {
   signal?.throwIfAborted();
   const absolute = resolve(path);
+  const parts = absolute.split(sep).filter(Boolean);
   let current = absolute.startsWith(sep) ? sep : '';
-  for (const part of absolute.split(sep).filter(Boolean)) {
+  for (let index = 0; index < parts.length; index++) {
     signal?.throwIfAborted();
-    current = join(current, part);
-    if ((await lstat(current)).isSymbolicLink()) fail('workspace_symlink', 'Workspace paths must not contain symlinks');
+    current = join(current, parts[index]!);
+    if (!(await lstat(current)).isSymbolicLink()) continue;
+    let linkText = '';
+    if (process.platform === 'darwin') {
+      try { linkText = await readlink(current); } catch { fail('workspace_symlink', 'Workspace paths must not contain symlinks'); }
+    }
+    const alias = process.platform === 'darwin' ? darwinSystemAlias(current, linkText) : undefined;
+    if (!alias) fail('workspace_symlink', 'Workspace paths must not contain symlinks');
+    await noSymlinks(join(alias, ...parts.slice(index + 1)), signal);
+    return;
   }
 }
 function gitEnvironment(): NodeJS.ProcessEnv {
@@ -116,7 +205,7 @@ async function initialize(root: string, entries: Entry[], signal?: AbortSignal):
   await git(root, ['commit', '--quiet', '--allow-empty', '--no-verify', '-m', 'Captured workspace baseline'], undefined, signal);
   return (await git(root, ['rev-parse', '--verify', 'HEAD'], undefined, signal)).toString('utf8').trim();
 }
-async function scan(root: string, maxFiles: number, maxBytes: number, gitOnly = false, signal?: AbortSignal): Promise<Entry[]> {
+async function scan(root: string, maxFiles: number, maxBytes: number, gitOnly = false, signal?: AbortSignal, filter?: SnapshotFilter): Promise<Entry[]> {
   const entries: Entry[] = [];
   let bytes = 0;
   async function walk(directory: string, prefix: string): Promise<void> {
@@ -126,7 +215,7 @@ async function scan(root: string, maxFiles: number, maxBytes: number, gitOnly = 
       const path = prefix ? `${prefix}/${item.name}` : item.name;
       safePath(path);
       if (!gitOnly && path === '.git') continue;
-      if (!gitOnly && protectedWorkspacePath(path)) fail('workspace_protected_path', 'Worker wrote a protected workspace path');
+      if (!gitOnly && protectedWorkspacePath(path, filter)) fail('workspace_protected_path', 'Worker wrote a protected workspace path');
       const absolute = join(directory, item.name);
       const stat = await lstat(absolute);
       if (stat.isSymbolicLink()) fail('workspace_symlink', 'Worker workspace contains a symlink');
@@ -171,7 +260,7 @@ export async function preflightWorkspace(request: WorkspaceRequest, policy: Work
   for (const path of request.includeUntracked ?? []) {
     signal?.throwIfAborted();
     safePath(path);
-    if (protectedWorkspacePath(path)) fail('workspace_protected_path', 'Cannot explicitly capture protected files');
+    if (protectedWorkspacePath(path, policy)) fail('workspace_protected_path', 'Cannot explicitly capture protected files');
     await noSymlinks(join(sourceRoot, path), signal);
     const stat = await lstat(join(sourceRoot, path));
     if (!stat.isFile() || stat.nlink !== 1) fail('workspace_file_unsafe', 'Only independent regular files may enter a workspace');
@@ -194,13 +283,14 @@ export async function prepareWorkspace(request: WorkspaceRequest, runDirectory: 
   if (inside(sourceRoot, canonicalRun)) fail('workspace_run_directory', 'Run directory must be outside the source repository');
   const paths = (await git(sourceRoot, ['ls-files', '--cached', '-z'], undefined, signal)).toString('utf8').split('\0').filter(Boolean);
   const requested = request.includeUntracked ?? [];
-  for (const path of requested) {safePath(path); if (protectedWorkspacePath(path)) fail('workspace_protected_path', 'Cannot explicitly capture protected files');}
+  for (const path of requested) {safePath(path); if (protectedWorkspacePath(path, policy)) fail('workspace_protected_path', 'Cannot explicitly capture protected files');}
   const entries: Entry[] = [];
+  const excluded: string[] = [];
   let bytes = 0;
   for (const path of [...new Set([...paths, ...requested])].sort()) {
     signal?.throwIfAborted();
     safePath(path);
-    if (protectedWorkspacePath(path)) continue;
+    if (protectedWorkspacePath(path, policy)) {excluded.push(path); continue;}
     const stat = await lstat(join(sourceRoot, path)).catch(error => {if (error.code === 'ENOENT') return undefined; throw error;});
     if (stat && (entries.length + 1 > maxFiles || bytes + stat.size > maxBytes)) fail('workspace_limit', 'Workspace exceeds configured file or byte limit');
     const entry = await readEntry(sourceRoot, path, signal);
@@ -214,8 +304,8 @@ export async function prepareWorkspace(request: WorkspaceRequest, runDirectory: 
   try {
     const commit = await initialize(root, entries, signal);
     const baselineFingerprint = fingerprint(entries);
-    const snapshot: WorkspaceSnapshot = {root, sourceRoot, mode: request.mode, baselineFingerprint};
-    states.set(snapshot, {root, runDirectory: canonicalRun, commit, fingerprint: baselineFingerprint, baseline: entries, gitFingerprint: await gitFingerprint(root, signal), maxFiles, maxBytes, mode: request.mode});
+    const snapshot: WorkspaceSnapshot = {root, sourceRoot, mode: request.mode, baselineFingerprint, excludedCount: excluded.length, excludedPaths: excluded.slice(0, EXCLUSION_LIST_CAP)};
+    states.set(snapshot, {root, runDirectory: canonicalRun, commit, fingerprint: baselineFingerprint, baseline: entries, gitFingerprint: await gitFingerprint(root, signal), maxFiles, maxBytes, mode: request.mode, filter: {exclude: policy.exclude, include: policy.include}});
     return snapshot;
   } catch (error) {await rm(root, {recursive: true, force: true}); throw error;}
 }
@@ -228,7 +318,7 @@ export async function collectPatch(snapshot: WorkspaceSnapshot, runDirectory: st
   await noSymlinks(runDirectory, signal);
   if (await realpath(runDirectory) !== state.runDirectory) fail('workspace_run_directory', 'Patch output must use the original run directory');
   if (await gitFingerprint(state.root, signal) !== state.gitFingerprint) fail('workspace_baseline_tampered', 'Worker changed snapshot git metadata');
-  const current = await scan(state.root, state.maxFiles, state.maxBytes, false, signal);
+  const current = await scan(state.root, state.maxFiles, state.maxBytes, false, signal, state.filter);
   const before = new Map(state.baseline.map(entry => [entry.path, entry]));
   const after = new Map(current.map(entry => [entry.path, entry]));
   const changedFiles = [...new Set([...before.keys(), ...after.keys()])].filter(path => {
@@ -250,7 +340,7 @@ export async function collectPatch(snapshot: WorkspaceSnapshot, runDirectory: st
   } catch {signal?.throwIfAborted(); fail('patch_not_applicable', 'Patch does not apply to the captured baseline');}
   finally {await rm(verificationRoot, {recursive: true, force: true});}
   // Verification reads must not race another worker edit before emitting artifacts.
-  if (fingerprint(await scan(state.root, state.maxFiles, state.maxBytes, false, signal)) !== fingerprint(current)) fail('workspace_changed', 'Worker workspace changed while collecting patch');
+  if (fingerprint(await scan(state.root, state.maxFiles, state.maxBytes, false, signal, state.filter)) !== fingerprint(current)) fail('workspace_changed', 'Worker workspace changed while collecting patch');
   const path = join(state.runDirectory, 'workspace.patch');
   const sha256 = hash(patch);
   signal?.throwIfAborted();
@@ -258,4 +348,21 @@ export async function collectPatch(snapshot: WorkspaceSnapshot, runDirectory: st
   await writeFile(join(state.runDirectory, 'workspace-changes.json'), JSON.stringify({changedFiles, baselineFingerprint: state.fingerprint, sha256}, null, 2) + '\n', {flag: 'wx', mode: 0o600, signal});
   signal?.throwIfAborted();
   return {path, changedFiles, baselineFingerprint: state.fingerprint, sha256};
+}
+
+/** Remove the worker snapshot and OpenCode isolation dirs. Artifacts written beside them stay. */
+export async function deleteRunWorkspace(runDirectory: string): Promise<void> {
+  const targets = ['workspace', 'opencode-config', 'opencode-cache', 'opencode-state', 'opencode-home', 'opencode-isolated.db'];
+  for (const name of targets) await forceRemove(join(runDirectory, name));
+}
+async function forceRemove(path: string): Promise<void> {
+  await relax(path);
+  await rm(path, {recursive: true, force: true});
+}
+async function relax(path: string): Promise<void> {
+  let stat;
+  try { stat = await lstat(path); } catch { return; }
+  await chmod(path, stat.isDirectory() ? 0o700 : 0o600).catch(() => undefined);
+  if (!stat.isDirectory()) return;
+  for (const entry of await readdir(path)) await relax(join(path, entry));
 }

@@ -36,7 +36,8 @@
         "rejected",
         "defer_to_host",
         "permission_required",
-        "cancelled"
+        "cancelled",
+        "interrupted"
       ]
     },
     "selectedRouteId": {
@@ -163,6 +164,19 @@
         "verificationMs": {
           "type": "number",
           "minimum": 0
+        }
+      }
+    },
+    "workspaceExclusions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "paths"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "paths": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {"type": "string", "maxLength": 4096}
         }
       }
     },

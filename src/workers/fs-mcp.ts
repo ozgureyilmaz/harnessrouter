@@ -9,7 +9,8 @@ import {RouterError} from '../domain/errors.js';
 const protectedParts={test:protectedWorkspacePath};
 export async function workspaceTool(rootInput:string,mode:'read-only'|'patch',name:string,args:Record<string,unknown>):Promise<unknown>{
   const root=await realpath(rootInput);const input=args.path??'.';
-  if(typeof input!=='string'||isAbsolute(input)||input.includes('\\')||/^[a-z]:/i.test(input)||input.includes('\0')||input.split(/[\\/]/).some(part=>part==='..'||protectedParts.test(part)))throw new RouterError('workspace_path_denied','Only project-relative non-sensitive paths are allowed');
+  const relativeInput=input==='.'?'':String(input).replace(/\\/g,'/');
+  if(typeof input!=='string'||isAbsolute(input)||input.includes('\\')||/^[a-z]:/i.test(input)||input.includes('\0')||relativeInput.split('/').some(part=>part==='..')||(relativeInput&&protectedParts.test(relativeInput)))throw new RouterError('workspace_path_denied','Only project-relative non-sensitive paths are allowed');
   const path=resolve(root,input);if(relative(root,path).startsWith('..'+sep)||isAbsolute(relative(root,path)))throw new RouterError('workspace_path_denied','Path is outside the snapshot');
   // Check every existing component; no symlink traversal even when the final target is new.
   let current=root;
@@ -17,7 +18,7 @@ export async function workspaceTool(rootInput:string,mode:'read-only'|'patch',na
     current=resolve(current,part);
     try{if((await lstat(current)).isSymbolicLink())throw new RouterError('workspace_path_denied','Symbolic links are not allowed');}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')break;throw error;}
   }
-  if(name==='list_files')return (await readdir(path,{withFileTypes:true})).filter(entry=>!entry.isSymbolicLink()&&!protectedParts.test(entry.name)).slice(0,1000).map(entry=>({name:entry.name,type:entry.isDirectory()?'directory':'file'}));
+  if(name==='list_files')return (await readdir(path,{withFileTypes:true})).filter(entry=>{const entryPath=relativeInput?`${relativeInput}/${entry.name}`:entry.name;return !entry.isSymbolicLink()&&!protectedParts.test(entryPath);}).slice(0,1000).map(entry=>({name:entry.name,type:entry.isDirectory()?'directory':'file'}));
   if(name==='read_file'){
     const stat=await lstat(path);if(!stat.isFile()||stat.size>1024*1024)throw new RouterError('workspace_file_limit','Only regular files up to 1 MiB may be read');
     return {path:input,content:await readFile(path,'utf8')};
