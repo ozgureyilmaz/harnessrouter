@@ -34,6 +34,6 @@ These statements stay in force. The short MCP text keeps the ones a host must se
 - Workers cannot recursively delegate.
 - No login, purchases or private-account actions.
 
-Browser tasks still pass `context.url` plus `allowedDomains`. Image tasks still pass `context.creativeOptions`. The task schema is unchanged.
+Browser tasks still pass `context.url` plus `allowedDomains`. Image tasks still pass `context.creativeOptions`. A synchronous `route_task` sends progress notifications when the host provides a progress token. `async: true` returns `{runId, taskId, status: "running"}` and keeps running if that request is cancelled. `get_run` accepts `runId` or `taskId`. A cancelled or interrupted taskId can be submitted again. A completed or failed taskId returns the saved result.
 
 A returned patch is for review. harnessrouter does not apply it to the source repository.

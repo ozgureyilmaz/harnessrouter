@@ -9,10 +9,10 @@ export const MCP_INSTRUCTIONS = [
 ].join('\n\n');
 
 export const MCP_TOOL_DESCRIPTIONS = {
-  route_task: 'Run one bounded task on an enabled harness. Returns text or a patch from an isolated snapshot. The patch is not applied. preferredRouteId skips selection. The same taskId returns the saved result.',
+  route_task: 'Run one bounded task on an enabled harness. Returns text or a patch from an isolated snapshot. The patch is not applied. preferredRouteId skips selection. async:true returns running. A completed or failed taskId returns the saved result.',
   list_harnesses: 'List enabled harnesses, health, budget, and restrictions. Set includePerformance for local time and token stats. This makes no paid call.',
-  get_run: 'Read a saved run by runId, including the result, the route decision, and the trace path. After a timeout, read the run before sending the task again.',
-  cancel_run: 'Cancel local execution and request provider cancellation. A paid job already in progress may still bill.',
+  get_run: 'Read a saved run by runId or taskId: result, route decision, and trace path. After a timeout, read the run before sending the task again.',
+  cancel_run: 'Cancel local execution and request provider cancellation. A paid job already in progress may still bill. A cancelled taskId can run again.',
 } as const;
 
 export function hostGuidanceDocument(): string {
@@ -33,7 +33,7 @@ When the user asks for another harness, an isolated run, or a reviewable patch:
 
 1. Call \`list_harnesses\` before the first task.
 2. Call \`route_task\` once. Set \`preferredRouteId\` only when the user named a harness.
-3. If the call times out, call \`get_run\` with that \`runId\` before sending the task again.
+3. If the call times out, call \`get_run\` with that \`runId\` or \`taskId\` before sending the task again. \`async: true\` returns a run id immediately.
 4. Review a returned patch yourself. Do not treat it as already applied.
 
 A worker cannot call harnessrouter. Roots, permissions, and models come from the local harnessrouter config, not from the task text.

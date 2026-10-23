@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {spawnSync} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {runProcess, workerEnvironment} from '../../src/workers/process.js';
-import {acquireWorkerLease} from '../../src/workers/lease.js';
+import {acquireWorkerLease, classifyLease, currentProcessIdentity, psEtimeToMs} from '../../src/workers/lease.js';
 
 const processEnv = {...process.env};
 const waitForFile = async (path: string, timeoutMs = 3000): Promise<void> => {
@@ -40,6 +40,14 @@ test('runProcess rejects malformed and oversized NDJSON events', async () => {
   await assert.rejects(runProcess(process.execPath, ['-e', `process.stdout.write(JSON.stringify({kind:'oversized'}))`], {
     cwd: process.cwd(), env: processEnv, timeoutMs: 3000, ndjson: true, maxBytes: 128, maxRecordBytes: 8,
   }), (error: {code?: string}) => error.code === 'worker_output_limit');
+});
+
+test('runProcess returns a Pi worker_error record from a nonzero exit', async () => {
+  const result = await runProcess(process.execPath, ['-e', `process.stdout.write(JSON.stringify({type:'worker_error', code:'PI_CREDENTIAL_MISSING', message:'No API key found for openai'})+'\\n'); process.exit(1)`], {
+    cwd: process.cwd(), env: processEnv, timeoutMs: 3000, ndjson: true,
+  });
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.records[0]?.code, 'PI_CREDENTIAL_MISSING');
 });
 
 test('runProcess rejects nonzero exits without exposing stderr content', async () => {
@@ -140,24 +148,56 @@ test('worker leases serialize concurrent callers and can be reacquired only afte
     const losers = contenders.filter((item): item is PromiseRejectedResult => item.status === 'rejected');
     assert.equal(winners.length, 1);
     assert.equal(losers.length, 1);
-    assert.equal((losers[0]!.reason as {code?: string}).code, 'worker_reconciliation_required');
+    assert.equal((losers[0]!.reason as {code?: string}).code, 'worker_busy');
     await winners[0]!.value();
     const releaseAgain = await acquireWorkerLease(dir, 'same-profile', 'run-c');
     await releaseAgain();
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
-test('worker lease treats a stale record as reconciliation required and never overwrites it', async () => {
+test('ps elapsed time parses BSD etime and rejects malformed values', () => {
+  assert.equal(psEtimeToMs('00:00'), 0);
+  assert.equal(psEtimeToMs('  03:04'), 184000);
+  assert.equal(psEtimeToMs('01:02:03'), ((1 * 60 + 2) * 60 + 3) * 1000);
+  assert.equal(psEtimeToMs('2-01:02:03'), (((2 * 24 + 1) * 60 + 2) * 60 + 3) * 1000);
+  assert.equal(psEtimeToMs('99:99'), undefined);
+  assert.equal(psEtimeToMs('nope'), undefined);
+});
+
+test('a live child pid stays busy and a mismatched start time is dead', async () => {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => undefined, 1000)'], {stdio: 'ignore'});
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.once('spawn', () => resolve());
+      child.once('error', reject);
+    });
+    assert.equal(typeof child.pid, 'number');
+    const identity = currentProcessIdentity();
+    const base = {profileId: 'child', runId: 'child-run', pid: child.pid!, token: 'child', startedAt: new Date().toISOString(), hostname: identity.hostname, ...(identity.bootId ? {bootId: identity.bootId} : {})};
+    assert.equal(classifyLease({...base, processStartedAt: new Date().toISOString()}), 'alive');
+    assert.equal(classifyLease({...base, processStartedAt: '2000-01-01T00:00:00.000Z'}), 'dead');
+  } finally { child.kill('SIGKILL'); }
+});
+
+test('worker lease reclaims a dead pid and leaves a live pid busy', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-stale-lease-'));
   try {
+    const {currentProcessIdentity} = await import('../../src/workers/lease.js');
     const profileId = 'stale-profile';
     const leaseDir = join(dir, 'worker-leases');
     await mkdir(leaseDir, {recursive: true, mode: 0o700});
     const path = join(leaseDir, `${createHash('sha256').update(profileId).digest('hex')}.json`);
-    const stale = JSON.stringify({profileId, runId: 'previous-run', pid: 987654321, token: 'stale-owner', startedAt: '2020-01-01T00:00:00.000Z'});
+    const stale = JSON.stringify({profileId, runId: 'previous-run', pid: 987654321, token: 'stale-owner', startedAt: '2020-01-01T00:00:00.000Z', hostname: currentProcessIdentity().hostname, processStartedAt: '2020-01-01T00:00:00.000Z'});
     await writeFile(path, stale, {mode: 0o600, flag: 'wx'});
-    await assert.rejects(acquireWorkerLease(dir, profileId, 'retry-run'), (error: {code?: string}) => error.code === 'worker_reconciliation_required');
-    assert.equal(await readFile(path, 'utf8'), stale);
+    const release = await acquireWorkerLease(dir, profileId, 'retry-run');
+    const reclaimed = JSON.parse(await readFile(path, 'utf8')) as {runId: string; pid: number};
+    assert.equal(reclaimed.runId, 'retry-run');
+    assert.equal(reclaimed.pid, process.pid);
+    await release();
+    const live = JSON.stringify({profileId, runId: 'live-run', pid: process.pid, token: 'live-owner', startedAt: new Date().toISOString(), ...currentProcessIdentity()});
+    await writeFile(path, live, {mode: 0o600, flag: 'wx'});
+    await assert.rejects(acquireWorkerLease(dir, profileId, 'other-run'), (error: {code?: string}) => error.code === 'worker_busy');
+    assert.equal(await readFile(path, 'utf8'), live);
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
