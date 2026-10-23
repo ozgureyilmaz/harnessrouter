@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, mkdir, readFile, realpath, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {loadConfig} from '../../src/config.js';
@@ -110,7 +110,7 @@ test('hosted selection is offered profile routes and list_harnesses does not for
 });
 
 test('a read-only profile forces a read-only snapshot and does not forward MCP servers', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'hr-profile-run-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'hr-profile-run-')));
   const source = join(root, 'source');
   await mkdir(source);
   const git = (args: string[]) => runProcess('git', args, {cwd: source, env: workerEnvironment(), timeoutMs: 5000});
