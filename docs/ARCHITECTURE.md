@@ -151,6 +151,7 @@ These are the upstream pages the implementation follows. Installed CLIs and mode
 
 - [OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions) for `choice` requests and `gpt-6-luna`.
 - [Codex MCP](https://developers.openai.com/codex/mcp) for local stdio registration.
+- [Adapter investigation](ADAPTER_INVESTIGATION.md) for Codex App Server, the Claude Agent SDK, and the OpenCode server. The CLI workers are unchanged.
 - [Pi RPC](https://pi.dev/docs/latest/rpc) for the long-running JSONL subprocess.
 - [fal queue](https://fal.ai/docs/model-endpoints/queue) for submit, status, and result. Profile endpoints are in [fal image profiles](FAL_PROFILES.md).
 - TypeSafe and Ollaya are documented in [decision providers](DECISION_PROVIDERS.md).

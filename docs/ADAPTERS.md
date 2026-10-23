@@ -46,6 +46,10 @@ Pi browser remains a real RPC-controlled agent runtime with restricted isolated 
 
 Host-managed composition uses a completed run's observations as input to a separate task and records `parentRunId` plus context fingerprint. It does not grant additional capabilities or spending authority. Historical specialist evidence is linked from the [README](../README.md); it does not establish live general-worker interoperability.
 
+## SDK and server protocols
+
+`docs/ADAPTER_INVESTIGATION.md` compares the current CLI workers with Codex App Server, the Claude Agent SDK, and the OpenCode server. The recommended first implementation is an opt-in Codex App Server adapter over stdio. This document does not add that adapter. The CLI workers remain the ones `ProcessWorkerAdapter` runs.
+
 ## Verification before adding a route
 
 Add offline tests for profile/manifest mismatch, unavailable runtime flags, malformed streams, terminal failures, explicit model identity, unknown-cost policy, cancellation, timeout, and output bounds. Exercise the full process adapter against a local subprocess double and real temporary Git repositories. New live evidence requires a separately authorized native run, a verified result/artifact, and an honest compatibility entry. Help/version output or fixture success alone is insufficient.

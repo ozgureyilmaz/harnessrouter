@@ -206,6 +206,7 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [compatibility](docs/COMPATIBILITY.md)
 - [decision providers](docs/DECISION_PROVIDERS.md)
 - [adapters](docs/ADAPTERS.md)
+- [adapter investigation](docs/ADAPTER_INVESTIGATION.md)
 - [performance](docs/PERFORMANCE.md)
 - [security and cost](docs/SECURITY_AND_COST.md)
 - [security](SECURITY.md)
