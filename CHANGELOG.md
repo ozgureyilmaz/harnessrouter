@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - A Codex profile can set `codexTransport` to `app-server` and speak a narrow Codex App Server stdio session. The default remains `codex exec`. The session does not resume threads, does not grant approvals, does not forward `mcpServers` or route-profile `allowedMcpServers`, and adds no npm dependency.
 - Optional `selectionFeedback` (`ROUTER_SELECTION_FEEDBACK` or the config key, default off). On a keyless local priority tie, saved success, time, and token observations for the same task type can choose a route, including a named route profile. A higher configured priority still wins. The `configured` route stays out of that comparison when the worker has a named profile. The decision trace records the comparison. Hosted decision prompts stay unchanged.
 
+### Changed
+
+- The README describes harnessrouter as a router above harnesses. The keyless selector ranks by configured priority. A hosted decision model is the opt-in that chooses among eligible routes. The terminology follows Theo Browne's [What is a harness?](https://x.com/theo/status/2113424203345265053).
+
 ## [1.0.0] - Unreleased
 
 First npm release of the local MCP router. `package.json` is already at `1.0.0`. Nothing has been tagged or published. The date is filled in when the `v1.0.0` tag is pushed and the publish workflow succeeds. See [open-source release](docs/OPEN_SOURCE_RELEASE.md).

@@ -2,7 +2,7 @@
 
 *one agent. many harnesses.*
 
-local harnessrouter. your current agent hands a bounded task to codex, claude code, opencode, pi, and more. the configured selector picks a harness, runs it on an isolated git snapshot, and gives you back text or a patch to review.
+local harnessrouter. your current agent hands a bounded task to codex, claude code, opencode, or pi. harnessrouter is the router above those harnesses. the keyless default ranks them by the priority you configure. with `--selector decisions`, a hosted decision model chooses among the eligible routes. the chosen harness runs on an isolated git snapshot and returns text or a patch for you to review.
 
 [![CI](https://github.com/ozgureyilmaz/harnessrouter/workflows/Offline%20checks/badge.svg)](https://github.com/ozgureyilmaz/harnessrouter/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -12,7 +12,7 @@ local harnessrouter. your current agent hands a bounded task to codex, claude co
 
 cross-harness workers: codex, claude code, opencode, and pi stay independent. mcp is the gateway. a codex profile can opt in to `codexTransport: "app-server"` and speak the stdio app server. the default remains `codex exec`. see [writing an adapter](docs/WRITING_AN_ADAPTER.md).
 
-route choice: a decision model picks the harness. local priority is the keyless default. pin a worker, or enable a hosted provider with `--selector decisions`.
+route choice: keyless local priority, or a hosted decision model with `--selector decisions`. pin a worker when you already know the route. optional `selectionFeedback` can break an equal priority from saved runs and stays off until you set it.
 
 isolated work: the worker gets a git snapshot. edits return as a patch. your repository is not changed for you.
 
@@ -20,13 +20,21 @@ tool pass-through: a worker profile can name local MCP servers in `mcpServers`. 
 
 inspectable runs: `list_harnesses`, `route_task`, `get_run`, and `cancel_run`.
 
+## a router, not a harness
+
+a harness is what lets a model act: tools, a syntax for calling them, and a loop that feeds results back. theo browne's [what is a harness?](https://x.com/theo/status/2113424203345265053) is the terminology used here. the chat window is not the harness.
+
+harnessrouter is not a harness. it is a router above harnesses, like a restaurant that lets you bring any kitchen. codex, claude code, opencode, and pi are the kitchens. harnessrouter sends one bounded task to one of them.
+
+t3 code, herdr, orca, and superset sit in that same category. harnessrouter's differences are an optional hosted decision model, git snapshot isolation, and a patch returned for review. the keyless local selector ranks by configured priority. equal top priorities defer to the host unless `selectionFeedback` is on. that switch stays off, and a higher priority still wins.
+
 ## how it works
 
 ```mermaid
 flowchart LR
     A[Your task] --> B[harnessrouter]
     B --> C{Decision model}
-    C -->|picks the best fit| D[Route to harness]
+    C -->|priority or hosted choice| D[Route to harness]
     D --> E1[Codex]
     D --> E2[Claude Code]
     D --> E3[OpenCode]
@@ -35,11 +43,11 @@ flowchart LR
     F --> A
 ```
 
-the decision model step is whichever selector is configured, local priority rules by default or the hosted decision model when enabled with `--selector decisions`.
+the decision model step is whichever selector is configured. `init` writes local priority. `--selector decisions` asks the hosted decision model. a file that omits `selector` still uses hosted decisions.
 
-the keyless default from `init` is local priority. it ranks `workerProfiles.priority` and does not read the task text. equal top priorities defer to the host. `--selector decisions` or `--decision-provider` asks a hosted decision model to return a route id. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. ollaya's default is `laya:typed-decisions` on `POST http://127.0.0.1:11435/v1/systemone`; pull that model with `ollaya pull laya:typed-decisions` while `ollaya serve` is running. the provider does not choose the worker model. a bad id, a missing local model, or a provider error stops the run instead of switching providers. route descriptions distinguish a read-only review from a patch, so a local model can choose different harnesses. the sequence below shows one hosted review choice. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
+the keyless default from `init` is local priority. it ranks `workerProfiles.priority`, and a named route profile's priority when that profile sets one. it does not read the task text. equal top priorities defer to the host unless `selectionFeedback` is on. that switch stays off, and a higher priority still wins. `--selector decisions` or `--decision-provider` asks a hosted decision model to return a route id. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. ollaya's default is `laya:typed-decisions` on `POST http://127.0.0.1:11435/v1/systemone`; pull that model with `ollaya pull laya:typed-decisions` while `ollaya serve` is running. the provider does not choose the worker model. a bad id, a missing local model, or a provider error stops the run instead of switching providers. route descriptions distinguish a read-only review from a patch, so a local model can choose different harnesses. the sequence below shows one hosted review choice. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
 
-a named route profile sits on a worker: harness, model, system instructions, workspace tools, an mcp server name allowlist, and `read-only` or `patch` permission. configs without `routeProfiles` keep today's `workerId:configured` routes. when profiles are present, the decision model and `preferredRouteId` choose a profile (`review` or `workerId:review`). a read-only profile cannot return a patch. mcp server names are recorded and are not sent to the worker. see [route profiles](docs/ROUTE_PROFILES.md).
+a named route profile sits on a worker: harness, model, system instructions, workspace tools, an mcp server name allowlist, and `read-only` or `patch` permission. configs without `routeProfiles` keep today's `workerId:configured` routes. when profiles are present, local priority, the hosted decision model, and `preferredRouteId` can choose a profile (`review` or `workerId:review`). a read-only profile cannot return a patch. mcp server names are recorded and are not sent to the worker. a worker `mcpServers` list is a separate opt-in and stays empty until set. a codex profile can set `codexTransport` to `app-server`; the default remains `codex exec`. see [route profiles](docs/ROUTE_PROFILES.md), [tool pass-through](docs/TOOL_PASSTHROUGH.md), and [writing an adapter](docs/WRITING_AN_ADAPTER.md).
 
 ```mermaid
 sequenceDiagram
@@ -48,12 +56,14 @@ sequenceDiagram
     participant D as Decision model
     participant H as Harness
     U->>R: Send a task
-    R->>D: Which harness fits this task?
+    R->>D: Which harness should run?
     D-->>R: Use Claude Code
     R->>H: Run the task on a safe copy of your repo
     H-->>R: Answer or patch
     R-->>U: Return the result
 ```
+
+the sequence shows a hosted choice. with the keyless default, local priority answers that step and no provider is called.
 
 the same `taskId` returns a finished `completed` or `failed` run. a synchronous `route_task` sends progress every few seconds when the host asked for it, so a host that resets its timeout on progress can wait out a long worker. pass `"async": true` to get `{runId, taskId, status: "running"}` immediately. that run keeps going if the request is cancelled. `get_run` accepts `runId` or `taskId`. a `cancelled` or `interrupted` task id can be sent again. the earlier run stays on disk.
 
