@@ -110,4 +110,5 @@ export interface DecisionTrace {
   selectedRouteId?: string|null; confidence?: number;
   probabilities?: {value: string; probability: number}[]; latencyMs?: number;
   decisionModel?: string; providerDecisionId?: string; reason?: string;
+  selectionFeedback?: {enabled: true; applied: boolean; reason: string; taskType: string; selectedRouteId?: string; compared: {routeId: string; taskType: string; attempts: number; completed: number; medianTotalMs: number | null; medianTotalTokens: number | null}[]};
 }
