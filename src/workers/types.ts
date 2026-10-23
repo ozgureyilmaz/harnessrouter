@@ -14,6 +14,10 @@ export interface WorkerProfile {
   /** Explicit opt-in to spawning this harness, including from a same-kind host. */
   allowExecution: boolean;
   provider?: string;
+  /** Loopback OpenAI-compatible base URL for the Pi adapter, such as Ollama's /v1 endpoint. */
+  baseUrl?: string;
+  /** Optional decision-model hint. The built-in adapter sentence is used when this is omitted. */
+  description?: string;
   /** Physical model identifiers permitted when the configured model is an alias. */
   allowedModels?: string[];
 }

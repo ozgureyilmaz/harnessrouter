@@ -48,7 +48,7 @@ async function settle(budget: Budget, id: string, cost: Cost): Promise<void> {
 }
 function safeFailure(error: unknown, signal: AbortSignal): RouterError {
   if (signal.aborted) return new RouterError('cancelled', 'System One request cancelled');
-  if (error instanceof RouterError) return new RouterError(error.code, 'System One request failed; no retry or fallback was attempted');
+  if (error instanceof RouterError) return error;
   return new RouterError('decision_network_error', 'System One connection failed; no retry or fallback was attempted');
 }
 

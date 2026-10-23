@@ -1,6 +1,7 @@
 import {request as httpRequest} from 'node:http';
 import {request as httpsRequest} from 'node:https';
 import {RouterError} from '../domain/errors.js';
+import {redact} from '../observability/trace.js';
 
 export interface DecisionHttpRequest {
   url: string; body: unknown; apiKey?: string; signal: AbortSignal; timeoutMs: number;
@@ -11,6 +12,28 @@ export class DecisionHttpError extends RouterError {
   constructor(code: string, message: string, readonly status?: number, readonly requestId?: string) {super(code, message);}
 }
 const MAX_RESPONSE_BYTES = 1024 * 1024;
+const MAX_ERROR_BYTES = 4096;
+function providerErrorDetail(raw: Buffer): {message?: string; code?: string} {
+  let parsed: unknown;
+  try {parsed = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(raw));} catch {return {};}
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const record = parsed as Record<string, unknown>;
+  const code = typeof record.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(record.code) ? record.code : undefined;
+  if (typeof record.error !== 'string') return {code};
+  const redacted = redact(record.error);
+  if (typeof redacted !== 'string') return {code};
+  const message = redacted.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 240);
+  return {code, ...(message ? {message} : {})};
+}
+function rejectedDecision(status: number, providerCode?: string): {code: string; message: string} {
+  if (status >= 300 && status < 400) return {code: 'decision_redirect_denied', message: 'Decision endpoint returned a redirect; no retry was attempted'};
+  if (status === 401) return {code: 'auth_invalid', message: 'Decision endpoint rejected the API key; no retry was attempted'};
+  if (status === 403) return {code: 'access_denied', message: 'Decision endpoint denied access; no retry was attempted'};
+  if (status === 404 && providerCode === 'MODEL_NOT_FOUND') return {code: 'decision_model_unavailable', message: 'The configured decision model is not installed on the local server. Pull it, then route again'};
+  if (status === 404) return {code: 'endpoint_unavailable', message: 'Decision endpoint was not found; no retry was attempted'};
+  if ([400, 413, 415, 422].includes(status)) return {code: 'invalid_request', message: 'Decision endpoint rejected the request; no retry was attempted'};
+  return {code: 'decision_unavailable', message: 'Decision endpoint rejected the request; no retry was attempted'};
+}
 function requestId(value: string|string[]|undefined): string|undefined {
   return typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,200}$/.test(value) ? value : undefined;
 }
@@ -40,10 +63,24 @@ export const postDecisionJson: DecisionHttpTransport = async (input) => {
         const id = requestId(response.headers['x-typesafe-request-id']);
         const status = response.statusCode ?? 0;
         if (status < 200 || status >= 300) {
-          // Error bodies may contain credentials or private input. Never decode or expose them.
-          response.destroy();
-          const code = status >= 300 && status < 400 ? 'decision_redirect_denied' : status === 401 ? 'auth_invalid' : status === 403 ? 'access_denied' : status === 404 ? 'endpoint_unavailable' : [400, 413, 415, 422].includes(status) ? 'invalid_request' : 'decision_unavailable';
-          fail(new DecisionHttpError(code, 'Decision endpoint rejected the request; no retry was attempted', status, id)); return;
+          // Keep only a short JSON error string. Raw bodies can echo prompts or credentials.
+          const chunks: Buffer[] = []; let bytes = 0;
+          const finish = () => {
+            const detail = providerErrorDetail(Buffer.concat(chunks));
+            const rejected = rejectedDecision(status, detail.code);
+            const message = detail.message ? `${rejected.message}. Provider message: ${detail.message}` : rejected.message;
+            fail(new DecisionHttpError(rejected.code, message, status, id));
+          };
+          response.on('data', (chunk: Buffer) => {
+            if (settled || bytes >= MAX_ERROR_BYTES) return;
+            const slice = chunk.subarray(0, MAX_ERROR_BYTES - bytes);
+            bytes += slice.length; chunks.push(slice);
+            if (bytes >= MAX_ERROR_BYTES) response.destroy();
+          });
+          response.on('end', finish);
+          response.on('error', finish);
+          response.on('aborted', finish);
+          return;
         }
         const advertised = Number(response.headers['content-length']);
         if (Number.isFinite(advertised) && advertised > MAX_RESPONSE_BYTES) {response.destroy(); fail(new DecisionHttpError('decision_response_limit', 'Decision response exceeded 1 MiB', status, id)); return;}

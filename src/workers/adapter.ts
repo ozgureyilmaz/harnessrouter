@@ -4,14 +4,14 @@ import {performance} from 'node:perf_hooks';
 import type {HarnessAdapter,HarnessTask,ExecutionContext,AdapterResult,Health} from '../domain/types.js';
 import type {WorkerProfile,WorkerProtocol} from './types.js';
 import type {WorkspacePolicy} from '../workspace/types.js';
-import {prepareWorkspace,collectPatch,preflightWorkspace} from '../workspace/snapshot.js';
+import {prepareWorkspace,collectPatch,preflightWorkspace,deleteRunWorkspace} from '../workspace/snapshot.js';
 import {runProcess,workerEnvironment} from './process.js';
 import {acquireWorkerLease} from './lease.js';
 import {RouterError} from '../domain/errors.js';
 import {redact} from '../observability/trace.js';
 export class ProcessWorkerAdapter implements HarnessAdapter {
   readonly id:string;
-  constructor(readonly profile:WorkerProfile,private protocol:WorkerProtocol,private policy:WorkspacePolicy,private stateRoot:string,private executionAuthorized=false){this.id=profile.id;}
+  constructor(readonly profile:WorkerProfile,private protocol:WorkerProtocol,private policy:WorkspacePolicy,private stateRoot:string,private executionAuthorized=false,private keepSnapshots=false){this.id=profile.id;}
   async health(options: {signal?: AbortSignal}={}):Promise<Health>{
     options.signal?.throwIfAborted();
     if(!this.executionAuthorized||!this.profile.enabled||!this.profile.allowExecution)return {available:false,reason:'worker_disabled'};
@@ -59,13 +59,15 @@ export class ProcessWorkerAdapter implements HarnessAdapter {
       const handoffMs=performance.now()-start;
       const env={...workerEnvironment(),...invocation.env};
       env.HARNESSROUTER_WORKER='1';env.HARNESSROUTER_DELEGATION_DEPTH='1';
-      await ctx.trace.event('worker.started',{profile:this.id,adapter:this.profile.adapter,requestedModel:runtime.model,baselineFingerprint:snapshot.baselineFingerprint,mode:snapshot.mode,...(ctx.profile?{routeProfile:ctx.profile.id,permissions:ctx.profile.permissions,enabledTools:ctx.profile.enabledTools,allowedMcpServers:ctx.profile.allowedMcpServers,mcpForwarded:false}:{})});
+      const workspaceExclusions={count:snapshot.excludedCount,paths:snapshot.excludedPaths};
+      await ctx.trace.event('worker.started',{profile:this.id,adapter:this.profile.adapter,requestedModel:runtime.model,baselineFingerprint:snapshot.baselineFingerprint,mode:snapshot.mode,excludedCount:workspaceExclusions.count,excludedPaths:workspaceExclusions.paths,...(ctx.profile?{routeProfile:ctx.profile.id,permissions:ctx.profile.permissions,enabledTools:ctx.profile.enabledTools,allowedMcpServers:ctx.profile.allowedMcpServers,mcpForwarded:false}:{})});
       const processStart=performance.now();
       const output=await runProcess(invocation.command,invocation.args,{cwd:snapshot.root,env,stdin:invocation.stdin,closeStdinOnEvent:invocation.closeStdinOnEvent,signal:executionSignal,timeoutMs:Math.min(task.timeoutMs??120000,this.profile.timeoutMs??120000),ndjson:true,onRecord:record=>{events=events.then(async()=>{try{await ctx.trace.event('worker.raw_event',record);}catch(error){traceFailure??=error;traceAbort.abort();}});}});
       await events;if(traceFailure)throw new RouterError('trace_write_failed','Could not persist worker events');ctx.signal.throwIfAborted();
       const executionMs=performance.now()-processStart;
       const completion=this.protocol.parse(output.records,runtime);
       const verificationStart=performance.now();
+      ctx.setStage?.('collecting');
       // Never accept the runtime's completion claim as proof that its patch applies.
       let patch;
       try{patch=await collectPatch(snapshot,ctx.artifactsDir,ctx.signal);}catch(error){
@@ -78,7 +80,11 @@ export class ProcessWorkerAdapter implements HarnessAdapter {
       if(patch)artifacts.push({type:'patch',path:patch.path,mimeType:'text/x-diff',verified:true});
       await ctx.trace.event('worker.verified',{baselineFingerprint:snapshot.baselineFingerprint,changedFiles:patch?.changedFiles??[],patchSha256:patch?.sha256,stderrBytes:output.stderrBytes});
       ctx.signal.throwIfAborted();
-      return {status:'completed',summary:completion.text.slice(0,4000),selectedModelId:completion.model??runtime.model,artifacts,cost:completion.cost,usage:completion.usage??[],structuredOutput:{answer:completion.text,provenance:{adapter:this.profile.adapter,profile:this.id,requestedModel:runtime.model,reportedModel:completion.reportedModel??null,sessionId:completion.sessionId??null,baselineFingerprint:snapshot.baselineFingerprint,...(ctx.profile?{routeProfile:ctx.profile.id,permissions:ctx.profile.permissions,mcpForwarded:false}:{})},...(patch?{patch:{...patch}}:{})},timing:{handoffMs,executionMs,verificationMs:performance.now()-verificationStart}};
-    }finally{try{await events;}finally{await release();}}
+      return {status:'completed',summary:completion.text.slice(0,4000),selectedModelId:completion.model??runtime.model,artifacts,cost:completion.cost,usage:completion.usage??[],workspaceExclusions,structuredOutput:{answer:completion.text,provenance:{adapter:this.profile.adapter,profile:this.id,requestedModel:runtime.model,reportedModel:completion.reportedModel??null,sessionId:completion.sessionId??null,baselineFingerprint:snapshot.baselineFingerprint,...(ctx.profile?{routeProfile:ctx.profile.id,permissions:ctx.profile.permissions,mcpForwarded:false}:{})},...(patch?{patch:{...patch}}:{})},timing:{handoffMs,executionMs,verificationMs:performance.now()-verificationStart}};
+    }finally{
+      try{await events;}finally{
+        try{await release();}finally{if(!this.keepSnapshots)await deleteRunWorkspace(ctx.artifactsDir);}
+      }
+    }
   }
 }
