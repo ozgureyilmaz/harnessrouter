@@ -1,6 +1,6 @@
 # Architecture & execution contracts
 
-A new `harnessrouter init` file uses local priority (`selector: "local"`) and does not call a decision provider. The diagram below shows the decisions path used when `selector` is `decisions`, including the compatibility default for a config that omits `selector`. Local priority and a single eligible route skip that call. See [decision providers](DECISION_PROVIDERS.md). The MCP instructions and tool descriptions are a short cookbook; the full host rules are in [host guidance](HOST_GUIDANCE.md).
+A new `harnessrouter init` file uses local priority (`selector: "local"`) and does not call a decision provider. The diagram below shows the decisions path used when `selector` is `decisions`, including the compatibility default for a config that omits `selector`. Local priority and a single eligible route skip that call. See [decision providers](DECISION_PROVIDERS.md). Optional named route profiles are an extra choosable route on a worker; see [route profiles](ROUTE_PROFILES.md). Configs that omit them keep one `workerId:configured` route. The MCP instructions and tool descriptions are a short cookbook; the full host rules are in [host guidance](HOST_GUIDANCE.md).
 
 ## System diagram
 

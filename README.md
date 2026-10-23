@@ -37,6 +37,8 @@ the decision model step is whichever selector is configured, local priority rule
 
 the keyless default from `init` is local priority. it ranks `workerProfiles.priority` and does not read the task text. equal top priorities defer to the host. `--selector decisions` or `--decision-provider` asks a hosted decision model to return a route id. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. ollaya's default is `laya:typed-decisions` on `POST http://127.0.0.1:11435/v1/systemone`; pull that model with `ollaya pull laya:typed-decisions` while `ollaya serve` is running. the provider does not choose the worker model. a bad id, a missing local model, or a provider error stops the run instead of switching providers. route descriptions distinguish a read-only review from a patch, so a local model can choose different harnesses. the sequence below shows one hosted review choice. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
 
+a named route profile sits on a worker: harness, model, system instructions, workspace tools, an mcp server name allowlist, and `read-only` or `patch` permission. configs without `routeProfiles` keep today's `workerId:configured` routes. when profiles are present, the decision model and `preferredRouteId` choose a profile (`review` or `workerId:review`). a read-only profile cannot return a patch. mcp server names are recorded and are not sent to the worker. see [route profiles](docs/ROUTE_PROFILES.md).
+
 ```mermaid
 sequenceDiagram
     participant U as You
@@ -215,6 +217,7 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [architecture](docs/ARCHITECTURE.md)
 - [compatibility](docs/COMPATIBILITY.md)
 - [decision providers](docs/DECISION_PROVIDERS.md)
+- [route profiles](docs/ROUTE_PROFILES.md)
 - [host guidance](docs/HOST_GUIDANCE.md)
 - [adapters](docs/ADAPTERS.md)
 - [performance](docs/PERFORMANCE.md)

@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Config `keepSnapshots` (default false), plus optional `snapshotExclude` and `snapshotInclude`.
 - MCP server instructions and tool descriptions are a short cookbook: when to call `route_task`, and when not to. The longer safety rules live in [host guidance](docs/HOST_GUIDANCE.md).
 - `harnessrouter init` writes `AGENTS.md` in the current directory when the file is absent. An existing file is replaced only after an interactive yes. A non-interactive run prints the snippet and leaves the file.
+- Named `routeProfiles` combine a worker, model, system instructions, workspace tools, an MCP server name allowlist, and `read-only` or `patch` permission. `list_harnesses` shows them. The decision model and `preferredRouteId` can select a profile. Configs that omit `routeProfiles` keep the `workerId:configured` route. MCP server names are recorded and not forwarded (`mcpForwarded: false`). A read-only profile cannot produce a patch.
 
 ## [1.0.0] - Unreleased
 

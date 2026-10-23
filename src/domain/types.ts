@@ -99,6 +99,15 @@ export interface ExecutionContext {
   runId: string; routeId: string; route: Route; modelProfileId?: string;
   budgetUsd: number; signal: AbortSignal; artifactsDir: string;
   trace: TraceSink; budget: Budget;
+  /** Present only when the selected route is a named route profile. */
+  profile?: {
+    id: string;
+    permissions: 'read-only' | 'patch';
+    systemInstructions?: string;
+    enabledTools: readonly string[];
+    model: string;
+    allowedMcpServers: readonly string[];
+  };
   /** Worker stages used by MCP progress notifications. */
   setStage?: (stage: 'executing' | 'collecting') => void;
 }

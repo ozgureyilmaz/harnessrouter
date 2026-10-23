@@ -4,6 +4,8 @@ import {RouterError} from '../domain/errors.js';
 import {DECISION_RESERVE_USD} from '../routing/decisions.js';
 import {validateSupportedRegistry} from './loader.js';
 import type {WorkerProfile} from '../workers/types.js';
+import type {RouteProfile} from '../workers/route-profile.js';
+import {preferenceSelectsRoute} from '../workers/route-profile.js';
 import type {HarnessManifest, HarnessTask, Health, Registry, Route} from '../domain/types.js';
 
 export interface EligibilityPolicy {
@@ -12,6 +14,7 @@ export interface EligibilityPolicy {
   decisionRequiresPaid?: boolean;
   decisionReservationUsd?: number;
   workerProfiles?: readonly WorkerProfile[];
+  routeProfiles?: readonly RouteProfile[];
   allowExecution?: boolean;
   dryRun: boolean;
   allowedDomains: string[];
@@ -74,7 +77,7 @@ export function getExecutableRoutes(
 ): EligibilityResult {
   validateTask(task);
   validateRegistry(registry);
-  validateSupportedRegistry(registry, policy.workerProfiles);
+  validateSupportedRegistry(registry, policy.workerProfiles, policy.routeProfiles);
   validatePolicy(policy);
 
   const eligible: EligibleRoute[] = [];
@@ -117,7 +120,9 @@ export function getExecutableRoutes(
         if(task.desiredOutput==='patch' && task.workspace.mode!=='patch'){fail('workspace_write_not_authorized');continue;}
         if(!worker.allowUnknownCost || task.allowUnknownCost!==true){fail('unknown_cost_not_authorized');continue;}
       }
-      if(task.preferredRouteId && task.preferredRouteId!==route.id){fail('route_not_requested');continue;}
+      const named=(policy.routeProfiles??[]).filter(item=>item.harness===harness.id);
+      if(named.length>0&&route.id===`${harness.id}:configured`&&task.preferredRouteId!==route.id){fail('route_profile_defined');continue;}
+      if(!preferenceSelectsRoute(task.preferredRouteId,route.id,policy.routeProfiles)){fail('route_not_requested');continue;}
 
       const routeRequirements = new Set(route.eligible_requirements.map(normalizeRequirement));
       const unmetRequirement = requirements.find(requirement => !routeRequirements.has(requirement));
