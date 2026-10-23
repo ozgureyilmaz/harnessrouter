@@ -2,6 +2,8 @@
 
 A worker profile can hand a short allowlist of local MCP servers to Codex, Claude Code, or OpenCode. The default is nothing. An omitted `mcpServers` field and `"mcpServers": []` behave the same way.
 
+A route profile's `allowedMcpServers` stays a recorded name list with `mcpForwarded: false`. It does not forward servers. See [route profiles](ROUTE_PROFILES.md).
+
 ## Opt in
 
 ```json
@@ -26,7 +28,7 @@ The configured command runs with the worker. harnessrouter does not add another 
 ## What each adapter receives
 
 - Codex keeps `-c mcp_servers={}` until the list is set. An opt-in replaces that value with the named servers only. `features.multi_agent=false` stays set.
-- Claude Code always keeps `harnessrouter_workspace`. An opt-in adds the named server beside it and extends `--allowedTools` with `mcp__<name>__*`. Native tools stay disabled.
+- Claude Code always keeps `harnessrouter_workspace`. An opt-in adds the named server beside it and extends `--allowedTools` with `mcp__<name>__*`. A route profile's `enabledTools` replaces the workspace wildcard with the named workspace tools. Native tools stay disabled.
 - OpenCode keeps `mcp: {}` until the list is set. An opt-in writes `{type: "local", command, enabled: true}` for each named server. The other permission denials stay in place.
 - Pi rejects a non-empty list at config load. Pi has no extra MCP servers in this release.
 

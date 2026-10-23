@@ -20,6 +20,10 @@ export interface WorkerProfile {
   /** Explicit opt-in to spawning this harness, including from a same-kind host. */
   allowExecution: boolean;
   provider?: string;
+  /** Loopback OpenAI-compatible base URL for the Pi adapter, such as Ollama's /v1 endpoint. */
+  baseUrl?: string;
+  /** Optional decision-model hint. The built-in adapter sentence is used when this is omitted. */
+  description?: string;
   /** Physical model identifiers permitted when the configured model is an alias. */
   allowedModels?: string[];
   /** Explicit stdio MCP servers. Omitted means none are forwarded. */
@@ -50,6 +54,8 @@ export interface WorkerProtocol {
   probe?(profile: WorkerProfile, options?: {signal?: AbortSignal}): Promise<Health>;
   invocation(profile: WorkerProfile, options: {
     cwd: string; prompt: string; mode: 'read-only' | 'patch'; runDirectory: string; signal?: AbortSignal;
+    /** Workspace MCP tools for a named route profile. Omitted on the default worker route. */
+    enabledTools?: readonly string[];
   }): Promise<WorkerInvocation>;
   parse(records: Record<string, unknown>[], profile: WorkerProfile): WorkerCompletion;
 }

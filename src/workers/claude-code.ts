@@ -3,7 +3,7 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {normalizeUsageRecord} from '../observability/metering.js';
 import type {Cost, UsageRecord} from '../domain/types.js';
-import {claudeAllowedTools, claudeMcpServers} from './mcp-allowlist.js';
+import {claudeMcpServers} from './mcp-allowlist.js';
 import type {WorkerProfile, WorkerProtocol} from './types.js';
 
 const str = (v: unknown): string | undefined => typeof v === 'string' && v.trim() ? v : undefined;
@@ -18,7 +18,7 @@ export const claudeCodeWorker: WorkerProtocol = {
   // The CLI version present in the development environment (1.0.35) currently fails during startup on Node 26.
   // The supervisor must require these flags in the installed CLI help before making the route eligible.
   requiredHelpFlags: ['--print', '--output-format', '--input-format', '--permission-mode', '--setting-sources', '--disable-slash-commands', '--tools', '--mcp-config', '--strict-mcp-config', '--allowedTools', '--system-prompt'],
-  async invocation(profile: WorkerProfile, {cwd, prompt, mode, runDirectory, signal}) {
+  async invocation(profile: WorkerProfile, {cwd, prompt, mode, runDirectory, signal, enabledTools}) {
     signal?.throwIfAborted();
     if (!profile.model.trim()) throw new Error('Claude Code worker requires an explicit model');
     // Disable inherited settings. The workspace MCP is always present; extra servers require mcpServers.
@@ -26,10 +26,14 @@ export const claudeCodeWorker: WorkerProtocol = {
     const mcpConfigPath = join(runDirectory, 'claude-mcp.json');
     const workspaceMcp = resolve(dirname(fileURLToPath(import.meta.url)), '../../dist/workers/fs-mcp.js');
     const extra = profile.mcpServers ?? [];
-    const allowed = claudeAllowedTools(extra);
+    const workspaceAllow = enabledTools
+      ? enabledTools.map(tool => `mcp__harnessrouter_workspace__${tool}`)
+      : ['mcp__harnessrouter_workspace__*'];
+    const allowed = [...workspaceAllow, ...extra.map(server => `mcp__${server.name}__*`)];
+    const mcpArgs = [workspaceMcp, cwd, mode, ...(enabledTools ? [enabledTools.join(',')] : [])];
     await writeFile(settingsPath, JSON.stringify({disableAllHooks: true, hooks: {}, enabledPlugins: {}, permissions: {allow: allowed}}), {encoding: 'utf8', mode: 0o600, flag: 'wx', signal});
     signal?.throwIfAborted();
-    await writeFile(mcpConfigPath, JSON.stringify({mcpServers: claudeMcpServers({command: process.execPath, args: [workspaceMcp, cwd, mode]}, extra)}), {encoding: 'utf8', mode: 0o600, flag: 'wx', signal});
+    await writeFile(mcpConfigPath, JSON.stringify({mcpServers: claudeMcpServers({command: process.execPath, args: mcpArgs}, extra)}), {encoding: 'utf8', mode: 0o600, flag: 'wx', signal});
     signal?.throwIfAborted();
     const message = JSON.stringify({type: 'user', message: {role: 'user', content: prompt}});
     const systemPrompt = extra.length

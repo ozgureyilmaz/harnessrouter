@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {promisify} from 'node:util';
 import test from 'node:test';
-import {collectPatch, prepareWorkspace} from '../../src/workspace/snapshot.js';
+import {collectPatch, prepareWorkspace, protectedWorkspacePath} from '../../src/workspace/snapshot.js';
 
 const run = promisify(execFile);
 async function git(root: string, ...args: string[]) {
@@ -55,13 +55,17 @@ test('local-only: captures dirty tracked baseline, deletions and only explicit u
 
 test('local-only: excludes tracked secrets, harness instructions and executable control configuration', async t => {
   const {source, runs, policy} = await fixture(t);
-  for (const path of ['.env', '.env.local', 'credentials.json', '.mcp.json', '.claude.json', 'opencode.json', 'opencode.jsonc', 'SYSTEM.md', 'AGENTS.md', '.claude/settings.json', '.pi/extensions/evil.ts', '.codex/config.toml', '.opencode/plugin.ts', 'hooks/pre-run.sh', 'node_modules/dependency/index.js']) {
+  const excluded = ['.env', '.env.local', 'credentials.json', '.mcp.json', '.claude.json', 'opencode.json', 'opencode.jsonc', 'SYSTEM.md', '.claude/settings.json', '.pi/extensions/evil.ts', '.codex/config.toml', '.opencode/plugin.ts', 'node_modules/dependency/index.js'];
+  const included = ['.env.example', 'docs/agents.md', 'src/hooks/useAuth.ts', 'hooks/pre-run.sh', 'src/lib/secrets-manager.ts', 'src/token-utils.ts'];
+  for (const path of [...excluded, ...included]) {
     await mkdir(join(source, path, '..'), {recursive: true});
-    await writeFile(join(source, path), 'must never be exposed');
+    await writeFile(join(source, path), 'fixture\n');
   }
   await git(source, 'add', '--force', '.');
   const snapshot = await prepareWorkspace({root: source, mode: 'patch'}, join(runs, 'one'), policy);
-  assert.deepEqual((await git(snapshot.root, 'ls-files')).stdout.trim().split('\n'), ['a.txt', 'deleted.txt']);
+  assert.deepEqual((await git(snapshot.root, 'ls-files')).stdout.trim().split('\n').sort(), ['a.txt', 'deleted.txt', ...included].sort());
+  assert.equal(snapshot.excludedCount, excluded.length);
+  assert.deepEqual(snapshot.excludedPaths, [...excluded].sort());
   await assert.rejects(prepareWorkspace({root: source, mode: 'patch', includeUntracked: ['.env']}, join(runs, 'two'), policy), {code: 'workspace_protected_path'});
 });
 
@@ -104,6 +108,11 @@ test('local-only: rejects baseline tampering, protected writes, symlink output a
   const protectedWrite = await prepareWorkspace({root: source, mode: 'patch'}, join(runs, 'protected'), policy);
   await writeFile(join(protectedWrite.root, '.env'), 'worker secret');
   await assert.rejects(collectPatch(protectedWrite, join(runs, 'protected')), {code: 'workspace_protected_path'});
+  const ordinary = await prepareWorkspace({root: source, mode: 'patch'}, join(runs, 'ordinary'), policy);
+  await mkdir(join(ordinary.root, 'src/hooks'), {recursive: true});
+  await writeFile(join(ordinary.root, 'src/hooks/useAuth.ts'), 'export {}\n');
+  const patch = await collectPatch(ordinary, join(runs, 'ordinary'));
+  assert.deepEqual(patch.changedFiles, ['src/hooks/useAuth.ts']);
   const symbolic = await prepareWorkspace({root: source, mode: 'patch'}, join(runs, 'symbolic'), policy);
   await symlink(join(base, 'outside'), join(symbolic.root, 'new-link'));
   await assert.rejects(collectPatch(symbolic, join(runs, 'symbolic')), {code: 'workspace_symlink'});
