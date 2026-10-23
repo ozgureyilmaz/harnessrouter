@@ -97,7 +97,16 @@ Merge your provider settings into the [worker configuration](../README.md#setup)
 
 Execution permission and workspace preflight come before selector payment admission. A sole worker or pinned image profile uses its full execution budget without a decision reservation. Underlying permissions still apply: native workers need their explicit unknown-cost grants, Pi always needs global execution and task unknown-cost grants, and image generation needs its own paid authorization. A paid choice among multiple routes must fit the selection reserve as well as execution costs before any request is sent.
 
-For Ollaya, start your local service with the chosen model available before routing. `ollaya list` shows installed model names. harnessrouter does not start the service or download models. Local inference has no hosted fee, but native workers can still consume subscription or API usage.
+For Ollaya, start the real local server and pull the configured model before routing. The default model is `laya:typed-decisions` and the default endpoint is `POST http://127.0.0.1:11435/v1/systemone`:
+
+```bash
+ollaya serve
+ollaya pull laya:typed-decisions
+```
+
+`ollaya list` shows installed model names. harnessrouter does not start the service or download models. A missing model fails with `decision_model_unavailable` and the server's short error text. Other HTTP errors keep their status code and a sanitized provider message. The request is not retried and the provider is not swapped. Local inference has no hosted fee, but native workers can still consume subscription or API usage.
+
+Hosted selection sends the task text plus one description per eligible route. The built-in descriptions distinguish a read-only review from a patch, which is what lets a local decision model choose different harnesses. Set `description` on a worker profile to replace that sentence.
 
 Reload your host's MCP connection after rebuilding or changing configuration. In Codex, Claude Code, OpenCode, or Pi, ask:
 

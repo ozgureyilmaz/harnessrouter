@@ -5,6 +5,7 @@ import {validateRegistry} from '../domain/schemas.js';
 import {RouterError} from '../domain/errors.js';
 import type {Registry} from '../domain/types.js';
 import type {WorkerProfile} from '../workers/types.js';
+import type {RouteProfile} from '../workers/route-profile.js';
 import {validateWorkerManifest} from '../workers/registry.js';
 
 const SAFE_NATIVE_FALLBACK_REQUIREMENTS = new Set([
@@ -40,7 +41,7 @@ export async function loadRegistry(path: string, profiles: readonly WorkerProfil
 }
 
 /** Validate configured bindings before route filtering; task input cannot register adapters. */
-export function validateSupportedRegistry(registry: Registry, profiles: readonly WorkerProfile[] = []): void {
+export function validateSupportedRegistry(registry: Registry, profiles: readonly WorkerProfile[] = [], routeProfiles: readonly RouteProfile[] = []): void {
   assertUniqueIds(registry);
   const bindings: Record<string, {kind: string; transport: string; routeModels: Record<string, string | null>}> = {
     'pi-browser': {
@@ -59,7 +60,7 @@ export function validateSupportedRegistry(registry: Registry, profiles: readonly
 
   for (const harness of registry.harnesses) {
     const profile = profiles.find(profile => profile.id === harness.id);
-    if(profile){validateWorkerManifest(harness,profile);continue;}
+    if(profile){validateWorkerManifest(harness,profile,routeProfiles);continue;}
     const binding = bindings[harness.id];
     if (!binding) throw new RouterError('registry_unsupported', `Harness is outside the registered adapter set: ${harness.id}`);
     if (harness.kind !== binding.kind || harness.transport !== binding.transport) {

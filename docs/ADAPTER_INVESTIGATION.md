@@ -2,7 +2,7 @@
 
 This note compares the Codex, Claude Code, and OpenCode integrations already in this repository with three newer control planes: Codex App Server, the Claude Agent SDK, and the OpenCode server. It recommends an order. It does not change runtime behavior.
 
-The comparison is from the worker code on master `7282dd5` and from public docs read on 2026-10-23. Those docs can move. This repository has not executed `codex app-server`, the Claude Agent SDK, or `opencode serve` in CI. A later adapter must keep CI on a fake.
+The comparison is from the worker code on current master and from public docs read on 2026-10-23. Those docs can move. Current master includes named route profiles and the opt-in worker MCP allowlist. This repository has not executed `codex app-server`, the Claude Agent SDK, or `opencode serve` in CI. A later adapter must keep CI on a fake.
 
 ## What the CLI adapters do now
 
@@ -14,8 +14,11 @@ The comparison is from the worker code on master `7282dd5` and from public docs 
 | Cancellation | The supervisor aborts the child process | Same | Same, including during the version and auth preflight |
 | Resume | Not used. The invocation passes `--ephemeral` | `session_id` is parsed and not sent back | `sessionID` is required and not sent back |
 | Dependency | The `codex` executable on `PATH` | The `claude` executable on `PATH` | The `opencode` executable, accepted only at version `1.18.15` |
+| MCP servers | Default `-c mcp_servers={}`. A worker `mcpServers` opt-in replaces that value with the named stdio servers. | Always includes `harnessrouter_workspace`. The same opt-in adds named servers beside it. A route profile's `enabledTools` narrows those workspace tools. | Default `mcp: {}`. The same opt-in writes local stdio entries. |
 
-Pi is already an SDK worker (`@earendil-works/pi-coding-agent` 1.1.0) and is outside this comparison.
+Pi is already an SDK worker (`@earendil-works/pi-coding-agent` 1.1.0) and is outside this comparison. Pi rejects a non-empty `mcpServers` list.
+
+Named route profiles sit on a worker. The process adapter applies the profile model, read-only or patch mode, system instructions, and enabled workspace tools before it calls the CLI. `allowedMcpServers` is a recorded name list with `mcpForwarded: false`. It is not added to Codex, Claude Code, or OpenCode. The only forward is the worker profile's `mcpServers` list, which defaults to empty. See [route profiles](ROUTE_PROFILES.md) and [tool pass-through](TOOL_PASSTHROUGH.md).
 
 Cancellation today is process death. None of the three CLI adapters send a protocol interrupt. Resume is unused on purpose: each run gets a new git snapshot, and a stored session is not that snapshot.
 
@@ -68,12 +71,14 @@ The worker in this repository accepts only OpenCode `1.18.15`, and only after a 
 
 Implement in this order:
 
-1. **Codex App Server, opt-in, stdio only.** It is the same `codex` executable, it needs no new npm dependency, and a fake JSONL peer can cover CI. The default stays `codex exec --json` with the current closed flags (`--ephemeral`, `--ignore-user-config`, `mcp_servers={}`, `features.multi_agent=false`).
+1. **Codex App Server, opt-in, stdio only.** It is the same `codex` executable, it needs no new npm dependency, and a fake JSONL peer can cover CI. The default stays `codex exec --json` with the current closed flags (`--ephemeral`, `--ignore-user-config`, `mcp_servers={}`, `features.multi_agent=false`). When a worker profile sets `mcpServers`, the CLI path replaces `mcp_servers={}`. The app-server opt-in must keep forwarding nothing unless that same list is mapped on purpose.
 2. **Claude Agent SDK, later, and only behind an optional dependency.** The gain over stream-json is a typed stream, abort, and session resume. The cost is a new package and a bundled Claude Code binary. The CLI adapter stays.
 3. **OpenCode server, last.** The CLI already emits JSON events. A server is a long-lived HTTP listener outside the `1.18.15` isolation audit.
 
 Do not turn on resume for the first server adapter. `thread/resume` and the Claude `resume` option attach a stored conversation to whatever directory the new process uses. harnessrouter creates a new snapshot per run and returns a patch from that snapshot. A resumed thread is not that snapshot. Cancellation for the first adapter should send `turn/interrupt` and still abort the process if the server does not stop.
 
-MCP progress notifications from the run-lifecycle work are on PR #8 and are not on master. The follow-up adapter can record the same events the CLI path already records (`worker.raw_event`). Connecting those events to MCP progress waits until that branch is merged. PR #12, if it merges, adds an explicit MCP allowlist on the CLI path. The app-server opt-in must keep forwarding nothing unless that same allowlist is mapped on purpose.
+MCP progress is already on master. A synchronous `route_task` emits `notifications/progress` for `validating`, `selecting`, `executing`, and `collecting` when the host sends a progress token. The follow-up adapter can record the same events the CLI path already records (`worker.raw_event`). Feeding those events into MCP progress is separate from choosing a protocol.
+
+Worker `mcpServers` is the stdio allowlist on the CLI path and defaults to empty. Route-profile `allowedMcpServers` stays recorded (`mcpForwarded: false`) and is not a second grant. The app-server opt-in must not launch servers from that name list, and it must not forward the worker allowlist unless a later change maps those commands on purpose.
 
 The follow-up that implements item 1 should also leave the CLI adapters in place, narrow the shared worker contract enough that a new harness can be added beside them, and document that in `docs/WRITING_AN_ADAPTER.md`. Cursor and Antigravity are examples of harnesses that document is for. They are not part of this investigation.

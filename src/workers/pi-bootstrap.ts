@@ -1,12 +1,14 @@
 /** Independent Pi 1.1.0 runtime. No CLI discovery, extension bridge, or parent-session state. */
 import {access, lstat, mkdir, readFile, readdir, realpath, stat, writeFile} from 'node:fs/promises';
-import {dirname, isAbsolute, relative, resolve, sep} from 'node:path';
+import {dirname, isAbsolute, join, relative, resolve, sep} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {
   createAgentSessionFromServices, createAgentSessionRuntime, createEditToolDefinition, createExtensionRuntime, createLsToolDefinition,
   createReadToolDefinition, createWriteToolDefinition, getAgentDir, ModelRuntime,
   runRpcMode, SessionManager, SettingsManager, type AgentSessionServices, type ResourceLoader, type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+import {piBootstrapFailure} from './pi-errors.js';
+import {piLocalModelDocument, validatePiBaseUrl} from './pi-local.js';
 
 /** Validate existing paths and the nearest existing parent for new paths, including symlinks. */
 export async function guardedPiPath(root: string, input: string): Promise<string> {
@@ -68,15 +70,21 @@ export function isolatedPiTools(cwd: string, mode: 'read-only'|'patch'): ToolDef
   return [...tools, ...(mode === 'patch' ? patchTools : [])] as unknown as ToolDefinition[];
 }
 
-export interface PiBootstrapInput {cwd: string; mode: 'read-only'|'patch'; runDirectory: string; provider: string; model: string}
+export interface PiBootstrapInput {cwd: string; mode: 'read-only'|'patch'; runDirectory: string; provider: string; model: string; baseUrl?: string}
 export async function runPiBootstrap(input: PiBootstrapInput): Promise<void> {
   if (!input.provider || !input.model || !['read-only', 'patch'].includes(input.mode) || !isAbsolute(input.cwd) || !isAbsolute(input.runDirectory)) {
     throw new Error('WORKER_PROTOCOL_ERROR: invalid Pi bootstrap input');
   }
+  const baseUrl = input.baseUrl === undefined ? undefined : validatePiBaseUrl(input.baseUrl);
   const nativeAuthPath = resolve(getAgentDir(), 'auth.json');
   const agentDir = resolve(input.runDirectory, 'pi-agent');
   await mkdir(agentDir, {recursive: true});
-  const runtime = await ModelRuntime.create({authPath: nativeAuthPath, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false});
+  let modelsPath: string | null = null;
+  if (baseUrl) {
+    modelsPath = join(input.runDirectory, 'pi-models.json');
+    await writeFile(modelsPath, JSON.stringify(piLocalModelDocument({provider: input.provider, model: input.model, baseUrl})), {mode: 0o600, flag: 'wx'});
+  }
+  const runtime = await ModelRuntime.create({authPath: nativeAuthPath, modelsPath, allowModelNetwork: false, refreshOnCreate: false});
   const model = runtime.getModel(input.provider, input.model);
   if (!model) throw new Error('WORKER_MODEL_UNAVAILABLE: explicit Pi provider/model absent from pinned catalog');
   const tools = isolatedPiTools(input.cwd, input.mode);
@@ -106,9 +114,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const configStat = await lstat(configPath);
     if (!configStat.isFile() || configStat.isSymbolicLink() || configStat.size > 64 * 1024) throw new Error('WORKER_PROTOCOL_ERROR: invalid bootstrap configuration file');
     await runPiBootstrap(JSON.parse(await readFile(configPath, 'utf8')) as PiBootstrapInput);
-  } catch {
-    // The SDK may include credential-bearing provider error bodies. Do not persist those raw errors.
-    process.stdout.write(`${JSON.stringify({type: 'worker_error', code: 'PI_RUNTIME_FAILED'})}\n`);
+  } catch (error) {
+    const failure = piBootstrapFailure(error);
+    process.stdout.write(`${JSON.stringify({type: 'worker_error', code: failure.code, message: failure.message})}\n`);
     process.exitCode = 1;
   }
 }

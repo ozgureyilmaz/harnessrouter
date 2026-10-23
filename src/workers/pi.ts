@@ -2,6 +2,7 @@ import {readFile, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {normalizePiUsage} from '../observability/metering.js';
 import {fileURLToPath, pathToFileURL} from 'node:url';
+import {piFailure} from './pi-errors.js';
 import type {WorkerCompletion, WorkerProfile, WorkerProtocol} from './types.js';
 
 function object(value: unknown): Record<string, unknown> {return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};}
@@ -23,11 +24,12 @@ export const piProtocol: WorkerProtocol = {
   },
   async invocation(profile, options) {
     options.signal?.throwIfAborted();
+    if (profile.mcpServers?.length) throw new Error('WORKER_PROTOCOL_ERROR: Pi does not accept additional MCP servers');
     if (!profile.provider || profile.executable) throw new Error('WORKER_PROTOCOL_ERROR: Pi requires provider/model and pinned SDK bootstrap');
     const bootstrap = fileURLToPath(new URL('./pi-bootstrap.js', import.meta.url));
     const sourceMode = import.meta.url.endsWith('.ts');
     const configPath = join(options.runDirectory, 'pi-bootstrap.json');
-    await writeFile(configPath, JSON.stringify({cwd: options.cwd, mode: options.mode, runDirectory: options.runDirectory, provider: profile.provider, model: profile.model}), {mode: 0o600, flag: 'wx', signal: options.signal});
+    await writeFile(configPath, JSON.stringify({cwd: options.cwd, mode: options.mode, runDirectory: options.runDirectory, provider: profile.provider, model: profile.model, ...(profile.baseUrl ? {baseUrl: profile.baseUrl} : {})}), {mode: 0o600, flag: 'wx', signal: options.signal});
     options.signal?.throwIfAborted();
     const args = sourceMode ? ['--import', import.meta.resolve('tsx'), bootstrap.replace(/\.js$/, '.ts')] : [bootstrap];
     return {command: process.execPath, args: [...args, '--config', configPath],
@@ -36,7 +38,8 @@ export const piProtocol: WorkerProtocol = {
     };
   },
   parse(records, profile): WorkerCompletion {
-    if (records.some((record) => record.type === 'worker_error' || record.type === 'error' || (record.type === 'response' && record.success === false))) throw new Error('WORKER_EXECUTION_FAILED: Pi runtime reported an error');
+    const failure = records.find((record) => record.type === 'worker_error' || record.type === 'error' || (record.type === 'response' && record.success === false));
+    if (failure) throw piFailure(failure, profile.provider);
     if (!records.some((record) => record.type === 'response' && record.id === 'task' && record.command === 'prompt' && record.success === true)) throw new Error('WORKER_PROTOCOL_ERROR: missing successful Pi RPC prompt response');
     if (!records.some((record) => record.type === 'agent_end')) throw new Error('WORKER_PROTOCOL_ERROR: missing Pi agent_end');
     const messages = records.filter((record) => record.type === 'message_end').map((record) => object(record.message)).filter((message) => message.role === 'assistant');

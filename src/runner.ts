@@ -17,7 +17,14 @@ import {evaluateCriteria,unverifiedCriteria} from './verification/criteria.js';
 import {normalizeUsageRecord} from './observability/metering.js';
 import {applyStaticImageRoute} from './routing/image-route.js';
 import {workerManifests} from './workers/registry.js';
+import {defaultEnabledTools, preferenceSelectsRoute, routeIdFor} from './workers/route-profile.js';
 import {selectLocal} from './routing/local.js';
+export interface RouteProgress {stage: 'validating' | 'selecting' | 'executing' | 'collecting'; elapsedMs: number}
+export interface RouteTaskOptions {onProgress?: (update: RouteProgress) => void | Promise<void>; progressIntervalMs?: number}
+export interface RunningAcknowledgement {runId: string; taskId: string; status: 'running'}
+export type RouteTaskResult = HarnessResult | RunningAcknowledgement;
+type RunStage = RouteProgress['stage'];
+const RERUNNABLE_STATUSES = new Set(['cancelled', 'interrupted']);
 export class HarnessRouter {
   private active=new Map<string,AbortController>();
   private pending=new Map<string,Promise<HarnessResult>>();
@@ -34,39 +41,80 @@ export class HarnessRouter {
   }
   private async registry(){
     const registry=await loadRegistry(this.config.registryPath,this.config.workerProfiles);
-    const ids=new Set(registry.harnesses.map(h=>h.id));
-    registry.harnesses.push(...workerManifests(this.config.workerProfiles??[]).filter(h=>!ids.has(h.id)));
+    const routeProfiles=this.config.routeProfiles??[];
+    for(const profile of this.config.workerProfiles??[]){
+      const built=workerManifests([profile],routeProfiles)[0];
+      const existing=registry.harnesses.find(harness=>harness.id===profile.id);
+      if(!existing){registry.harnesses.push(built);continue;}
+      for(const route of built.routes)if(!existing.routes.some(item=>item.id===route.id))existing.routes.push(route);
+    }
     return registry;
   }
+  private boundProfile(routeId:string){
+    const profile=this.config.routeProfiles?.find(item=>routeIdFor(item)===routeId);
+    if(!profile)return undefined;
+    const worker=this.config.workerProfiles?.find(item=>item.id===profile.harness);
+    return {id:profile.id,permissions:profile.permissions,enabledTools:profile.enabledTools??defaultEnabledTools(profile.permissions),model:profile.model??worker?.model??'',allowedMcpServers:profile.allowedMcpServers,...(profile.systemInstructions?{systemInstructions:profile.systemInstructions}:{})};
+  }
+  private profileListing(){
+    return (this.config.routeProfiles??[]).map(profile=>{
+      const worker=this.config.workerProfiles?.find(item=>item.id===profile.harness);
+      return {id:profile.id,routeId:routeIdFor(profile),harness:profile.harness,adapter:worker?.adapter??null,model:profile.model??worker?.model??null,permissions:profile.permissions,priority:profile.priority??worker?.priority??0,systemInstructions:profile.systemInstructions??null,enabledTools:profile.enabledTools??defaultEnabledTools(profile.permissions),allowedMcpServers:[...profile.allowedMcpServers],mcpForwarded:false as const};
+    });
+  }
   async listHarnesses(options: {includePerformance?: boolean}={}){
-    const result={decisionLayer:{enabled:(this.config.selector??'decisions')==='decisions',provider:this.decisionProvider,model:this.config.decisionModel,requiresPaid:this.decisionPaid,reservationUsd:this.decisionReserve,credentialConfigured:this.decisionProvider==='openai'?!!this.config.apiKey:this.decisionProvider==='jev'?!!this.config.jevApiKey:true,...(this.decisionProvider==='ollaya'?{baseUrl:this.config.ollayaBaseUrl}: {})},registry:await this.registry(),health:await this.health(),policy:{selector:this.config.selector??'decisions',dryRun:this.config.dryRun,allowExecution:this.config.allowExecution??false,allowPaid:this.config.allowPaid,remainingBudgetUsd:this.ledger.remainingUsd,allowedDomains:this.config.allowedDomains},credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
+    const result={decisionLayer:{enabled:(this.config.selector??'decisions')==='decisions',provider:this.decisionProvider,model:this.config.decisionModel,requiresPaid:this.decisionPaid,reservationUsd:this.decisionReserve,credentialConfigured:this.decisionProvider==='openai'?!!this.config.apiKey:this.decisionProvider==='jev'?!!this.config.jevApiKey:true,...(this.decisionProvider==='ollaya'?{baseUrl:this.config.ollayaBaseUrl}: {})},registry:await this.registry(),profiles:this.profileListing(),health:await this.health(),policy:{selector:this.config.selector??'decisions',dryRun:this.config.dryRun,allowExecution:this.config.allowExecution??false,allowPaid:this.config.allowPaid,remainingBudgetUsd:this.ledger.remainingUsd,allowedDomains:this.config.allowedDomains},credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey},mcpAllowlists:(this.config.workerProfiles??[]).map(profile=>({id:profile.id,servers:(profile.mcpServers??[]).map(server=>server.name)}))};
     if(!options.includePerformance)return result;
     const {readPerformanceReport}=await import('./observability/performance.js');
     return {...result,performance:await readPerformanceReport(this.config.artifactsDir,{limit:250})};
   }
 
-  routeTask(input:unknown,hostSignal?:AbortSignal):Promise<HarnessResult> {
+  routeTask(input: {async: true} & object, hostSignal?: AbortSignal, options?: RouteTaskOptions): Promise<RouteTaskResult>;
+  routeTask(input: unknown, hostSignal?: AbortSignal, options?: RouteTaskOptions): Promise<HarnessResult>;
+  routeTask(input: unknown, hostSignal?: AbortSignal, options?: RouteTaskOptions): Promise<RouteTaskResult> {
     validateTask(input);
-    const key=createHash('sha256').update(input.taskId).digest('hex');
     const task=structuredClone(input);
+    const asyncMode=task.async===true;
+    delete task.async;
+    const key=createHash('sha256').update(task.taskId).digest('hex');
+    const fingerprint=createHash('sha256').update(JSON.stringify(task)).digest('hex');
     // Compare pending inputs too; taskId must never alias two different operations.
-    const existing=this.pending.get(key);if(existing)return existing.then(old=>{
-      return this.getRun(old.runId).then(async()=>{
-        const prior=JSON.parse(await readFile(join(this.config.artifactsDir,'tasks',key+'.json'),'utf8'));
-        if(prior.fingerprint!==createHash('sha256').update(JSON.stringify(task)).digest('hex'))throw new RouterError('idempotency_conflict','taskId already used for a different task');
-        return old;
-      });
+    const existing=this.pending.get(key);if(existing)return existing.then(async old=>{
+      const prior=JSON.parse(await readFile(join(this.config.artifactsDir,'tasks',key+'.json'),'utf8'));
+      if(prior.fingerprint!==fingerprint)throw new RouterError('idempotency_conflict','taskId already used for a different task');
+      return old;
     });
-    const run=this.execute(task,key,hostSignal).finally(()=>this.pending.delete(key));this.pending.set(key,run);return run;
+    let resolveStarted:(runId:string)=>void=()=>undefined;
+    let startedSettled=false;
+    const started=new Promise<string>(resolve=>{resolveStarted=runId=>{startedSettled=true;resolve(runId);};});
+    const run=this.execute(task,key,asyncMode?undefined:hostSignal,{...options,onStarted:resolveStarted}).finally(()=>this.pending.delete(key));
+    this.pending.set(key,run);
+    if(!asyncMode)return run;
+    return Promise.race([
+      started.then(runId=>({kind:'started' as const,runId})),
+      run.then(result=>({kind:'done' as const,result}),error=>({kind:'error' as const,error})),
+    ]).then(outcome=>{
+      if(!startedSettled)resolveStarted('');
+      if(outcome.kind==='error')throw outcome.error;
+      if(outcome.kind==='done')return outcome.result;
+      void run.catch(()=>undefined);
+      return {runId:outcome.runId,taskId:task.taskId,status:'running' as const};
+    });
   }
-  private async execute(task:HarnessTask,key:string,hostSignal?:AbortSignal):Promise<HarnessResult> {
+  private async execute(task:HarnessTask,key:string,hostSignal?:AbortSignal,routeOptions?:RouteTaskOptions&{onStarted?:(runId:string)=>void}):Promise<HarnessResult> {
     const runId=randomUUID();const trace=new RunTrace(this.config.artifactsDir,runId);
     const controller=new AbortController();const signal=controller.signal;
     const configuredTimeout=task.workspace?300000:task.requirements.some(r=>['browser','screenshot','public_site_research'].includes(r))?this.config.piTaskTimeoutMs:this.config.falTaskTimeoutMs;
     const timeout=Math.min(task.timeoutMs??configuredTimeout,configuredTimeout,300000);
     const timer=setTimeout(()=>controller.abort(new RouterError('timeout','Task timed out')),timeout);
-    const abort=()=>controller.abort(hostSignal?.reason);hostSignal?.addEventListener('abort',abort,{once:true});
-    if(hostSignal?.aborted)abort();this.active.set(runId,controller);
+    const hostAbort=()=>controller.abort(new RouterError('client_disconnected','Host request ended before the run finished',true));
+    if(hostSignal){hostSignal.addEventListener('abort',hostAbort,{once:true});if(hostSignal.aborted)hostAbort();}
+    this.active.set(runId,controller);
+    let stage:RunStage='validating';
+    const progressStarted=performance.now();
+    const progressEvery=progressInterval(routeOptions?.progressIntervalMs??this.config.progressIntervalMs);
+    const progressTimer=routeOptions?.onProgress?setInterval(()=>{void Promise.resolve(routeOptions.onProgress?.({stage,elapsedMs:Math.round(performance.now()-progressStarted)})).catch(()=>undefined);},progressEvery):undefined;
+    progressTimer?.unref?.();
     let selectedRouteId:string|null=null;let selectedHarnessId:string|null=null;
     let selectedModelId:string|null=null;let decisionCost:HarnessResult['cost']={status:'not_applicable',usd:0};
     let decisionRequired=false;let decisionAttempted=false;let decisionMeteringObserved=false;
@@ -97,16 +145,23 @@ export class HarnessRouter {
       try {
         await writeFile(indexPath,JSON.stringify({runId,fingerprint}),{flag:'wx',mode:0o600});
       }catch(e){if((e as NodeJS.ErrnoException).code!=='EEXIST')throw e;
-        const old=JSON.parse(await readFile(indexPath,'utf8'));
-        if(old.fingerprint!==fingerprint)throw new RouterError('idempotency_conflict','taskId already used for a different task; use a new taskId');
+        const old=JSON.parse(await readFile(indexPath,'utf8')) as {runId?:string;fingerprint?:string;history?:unknown};
+        if(old.fingerprint!==fingerprint||typeof old.runId!=='string')throw new RouterError('idempotency_conflict','taskId already used for a different task; use a new taskId');
         let oldResult:Record<string,unknown>;
         try{oldResult=await this.getRun(old.runId);}catch{throw new RouterError('reconciliation_required',`Previous request ${old.runId} is not yet finalized; inspect get_run instead of resubmitting`);}
-        if('result' in oldResult && oldResult.result) return oldResult.result as HarnessResult;
-        throw new RouterError('reconciliation_required',`Previous request ${old.runId} may still be executing; inspect get_run instead of resubmitting`);
+        const previous=isRecord(oldResult.result)?oldResult.result:undefined;
+        const previousStatus=typeof previous?.status==='string'?previous.status:isRecord(oldResult.status)&&typeof oldResult.status.status==='string'?oldResult.status.status:undefined;
+        if(previousStatus&&RERUNNABLE_STATUSES.has(previousStatus)){
+          const history=Array.isArray(old.history)?old.history.filter((item):item is string=>typeof item==='string'):[];
+          history.push(old.runId);
+          await writeFile(indexPath,JSON.stringify({runId,fingerprint,history}),{mode:0o600});
+        }else if(previous) return previous as unknown as HarnessResult;
+        else throw new RouterError('reconciliation_required',`Previous request ${old.runId} may still be executing; inspect get_run instead of resubmitting`);
       }
       await trace.event('request',{taskId:task.taskId,promptHash:taskFingerprint(task.prompt),promptLength:task.prompt.length,requirements:task.requirements,requiredCapabilities:task.requiredCapabilities??[],desiredOutput:task.desiredOutput,parentRunId:task.parentRunId,timeoutMs:timeout});
       await trace.save('task.json',task);
       await trace.save('status.json',{runId,status:'validating'});
+      routeOptions?.onStarted?.(runId);
       checkAbort(signal);
       if(task.requirements.some(r=>['browser','screenshot','public_site_research'].includes(r))) {
         if(typeof task.context?.url!=='string')throw new RouterError('invalid_browser_task','Browser task requires context.url');
@@ -116,7 +171,7 @@ export class HarnessRouter {
       const health=await this.health({ids:taskHealthCandidates(task,registry,this.config),signal});checkAbort(signal);
       const healthCheckedAt=performance.now();
       const effectiveBudget=Math.min(this.ledger.remainingUsd,task.maxCostUsd??this.config.perTaskUsd,this.config.perTaskUsd);
-      const policy={allowPaid:this.config.allowPaid,dryRun:this.config.dryRun,selector:this.config.selector??'decisions',decisionRequiresPaid:this.decisionPaid,decisionReservationUsd:this.decisionReserve,workerProfiles:this.config.workerProfiles,allowExecution:this.config.allowExecution,remainingBudgetUsd:effectiveBudget,allowedDomains:this.config.allowedDomains,credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
+      const policy={allowPaid:this.config.allowPaid,dryRun:this.config.dryRun,selector:this.config.selector??'decisions',decisionRequiresPaid:this.decisionPaid,decisionReservationUsd:this.decisionReserve,workerProfiles:this.config.workerProfiles,routeProfiles:this.config.routeProfiles,allowExecution:this.config.allowExecution,remainingBudgetUsd:effectiveBudget,allowedDomains:this.config.allowedDomains,credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
       let options=getExecutableRoutes(task,registry,health,policy);
       const budget=this.ledger.forRun(runId,Math.min(task.maxCostUsd??this.config.perTaskUsd,this.config.perTaskUsd));
       // Adapters preflight their own constraints without provider calls or reservations.
@@ -124,7 +179,7 @@ export class HarnessRouter {
       for(const candidate of options.eligible){
         const adapter=this.adapters.find(a=>a.id===candidate.harness.id);
         try{
-          await adapter?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget});
+          await adapter?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget,profile:this.boundProfile(candidate.route.id)});
           preflightEligible.push(candidate);
         }catch(error){checkAbort(signal);options.excluded.push({id:candidate.route.id,reason:error instanceof RouterError?error.code:'adapter_preflight_failed'});}
       }
@@ -137,7 +192,7 @@ export class HarnessRouter {
         const admitted=[];
         for(const candidate of options.eligible){
           try{
-            await this.adapters.find(adapter=>adapter.id===candidate.harness.id)?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:Math.max(0,budget.remainingUsd-this.decisionReserve),signal,artifactsDir:trace.directory,trace,budget});
+            await this.adapters.find(adapter=>adapter.id===candidate.harness.id)?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:Math.max(0,budget.remainingUsd-this.decisionReserve),signal,artifactsDir:trace.directory,trace,budget,profile:this.boundProfile(candidate.route.id)});
             admitted.push(candidate);
           }catch(error){checkAbort(signal);options.excluded.push({id:candidate.route.id,reason:error instanceof RouterError?error.code:'adapter_preflight_failed'});}
         }
@@ -149,6 +204,7 @@ export class HarnessRouter {
       }
       decisionTrace.eligibleRouteIds=options.eligible.map(c=>c.route.id);decisionTrace.excludedRoutes=options.excluded;
       await trace.event('eligibility',{...options,health});checkAbort(signal);
+      stage='selecting';
       if(!options.eligible.length)throw new RouterError(options.excluded.some(r=>/paid|permission|approval/.test(r.reason))?'permission_required':'no_eligible_route','No authorized reachable route satisfies every task constraint');
       if(options.eligible.length===1&&options.eligible[0].harness.id==='native') {
         selectedRouteId=options.eligible[0].route.id;selectedHarnessId='native';
@@ -158,7 +214,7 @@ export class HarnessRouter {
       }
       let chosen=options.eligible[0]!;
       if((this.config.selector??'decisions')!=='decisions'&&options.eligible.length>1){
-        const local=selectLocal(options.eligible,this.config.workerProfiles);
+        const local=selectLocal(options.eligible,this.config.workerProfiles,this.config.routeProfiles);
         if(!local){
           result={schemaVersion:'1.3',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId:null,selectedHarnessId:null,selectedModelId:null,summary:'Several eligible routes have equal priority. Choose preferredRouteId or configure worker priorities.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing:{totalMs:performance.now()-trace.start},cost:{status:'not_applicable',usd:0},usage:[],costComponents:[],tracePath:trace.path};
           await trace.save('decision.json',{...decisionTrace,decisionStatus:'not_required',reason:'local_priority_tie'});validateResult(result);await trace.save('result.json',result);await trace.save('status.json',{runId,status:result.status});return result;
@@ -193,7 +249,8 @@ export class HarnessRouter {
         if((decisionRequired||performance.now()-healthCheckedAt>1000)&&!(await abortable(adapter.health({signal}),signal)).available)throw new RouterError('adapter_unavailable','Selected harness became unavailable');
         checkAbort(signal);await trace.save('status.json',{runId,status:'executing',selectedRouteId});
         executionStart=performance.now();
-        const executionContext={runId,routeId:selectedRouteId,route:chosen.route,modelProfileId:chosen.route.agent_model_profile??undefined,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget};
+        stage='executing';
+        const executionContext={runId,routeId:selectedRouteId,route:chosen.route,modelProfileId:chosen.route.agent_model_profile??undefined,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget,profile:this.boundProfile(selectedRouteId!),setStage:(next:'executing'|'collecting')=>{stage=next;}};
         await adapter.preflight?.(task,executionContext);
         const output=await adapter.execute({...task,timeoutMs:timeout},executionContext);
         await adapter.verify?.(task,output,executionContext);
@@ -227,7 +284,7 @@ export class HarnessRouter {
         checkAbort(signal);
         timing.verificationMs=(output.timing?.verificationMs??0)+performance.now()-verificationStart;
         const aggregateCost=output.cost.status==='unknown'||decisionCost.status==='unknown'?{status:'unknown' as const,details:'Includes unpriced execution or routing accounting; inspect costComponents for any known subtotal'}:{status:'estimated' as const,usd:(output.cost.usd??0)+(decisionCost.usd??0),details:'Verified published unit price estimate; not a provider invoice'};
-        result={schemaVersion:task.schemaVersion==='1.1'?'1.3':'1.2',runId,taskId:task.taskId,status:output.status,selectedRouteId,selectedHarnessId,selectedModelId,summary:output.summary,structuredOutput:output.structuredOutput,artifacts:output.artifacts,criterionResults:[],timing,cost:aggregateCost,usage:usageRecords,costComponents,...(output.error?{error:output.error}:{})};
+        result={schemaVersion:task.schemaVersion==='1.1'?'1.3':'1.2',runId,taskId:task.taskId,status:output.status,selectedRouteId,selectedHarnessId,selectedModelId,summary:output.summary,structuredOutput:output.structuredOutput,artifacts:output.artifacts,criterionResults:[],timing,cost:aggregateCost,usage:usageRecords,costComponents,...(output.workspaceExclusions?{workspaceExclusions:output.workspaceExclusions}:{}),...(output.error?{error:output.error}:{})};
       }
     }catch(error) {
       const typed=signal.aborted?(signal.reason instanceof RouterError?signal.reason:new RouterError('cancelled','Task cancelled')):error instanceof RouterError?error:new RouterError('execution_failed',error instanceof Error?error.message:'Unknown execution error');
@@ -244,8 +301,9 @@ export class HarnessRouter {
       }
       if(executionStart!==undefined&&selectedHarnessId==='pi-browser'&&!usageRecords.some(record=>record.source==='pi_session_stats'))usageRecords.push(normalizeUsageRecord({provider:'openai-codex',model:selectedModelId??undefined,source:'pi_session_stats',measurement:'unavailable',details:'Pi execution failed before session token usage could be collected.'}));
       await trace.event('failure',{code:typed.code,message:typed.message,retryable:typed.retryable});
-      result={schemaVersion:task.schemaVersion==='1.1'?'1.3':'1.2',runId,taskId:task.taskId,status:typed.code==='permission_required'?'permission_required':typed.code==='cancelled'?'cancelled':['no_eligible_route','unsafe_url','domain_denied','invalid_browser_task'].includes(typed.code)?'rejected':'failed',selectedRouteId,selectedHarnessId,selectedModelId,artifacts:[],criterionResults:[],timing,cost:executionStart!==undefined?{status:'unknown',details:'Execution failed; a provider operation may still bill. Inspect trace/request ID before retry.'}:this.ledger.costForRun(runId),usage:usageRecords,costComponents,error:{code:typed.code,message:typed.message,retryable:typed.retryable}};
-    }finally{clearTimeout(timer);hostSignal?.removeEventListener('abort',abort);this.active.delete(runId);}
+      const terminal=typed.code==='permission_required'?'permission_required':typed.code==='cancelled'||typed.code==='client_disconnected'?'cancelled':['no_eligible_route','unsafe_url','domain_denied','invalid_browser_task'].includes(typed.code)?'rejected':'failed';
+      result={schemaVersion:task.schemaVersion==='1.1'?'1.3':'1.2',runId,taskId:task.taskId,status:terminal,selectedRouteId,selectedHarnessId,selectedModelId,artifacts:[],criterionResults:[],timing,cost:executionStart!==undefined?{status:'unknown',details:'Execution failed; a provider operation may still bill. Inspect trace/request ID before retry.'}:this.ledger.costForRun(runId),usage:usageRecords,costComponents,error:{code:typed.code,message:typed.message,retryable:typed.retryable}};
+    }finally{clearTimeout(timer);clearInterval(progressTimer);hostSignal?.removeEventListener('abort',hostAbort);this.active.delete(runId);}
     if(!result)throw new RouterError('internal_error','Missing result');
     result.criterionResults=evaluateCriteria(task,result);
     result.timing.totalMs=performance.now()-trace.start;result.tracePath=trace.path;
@@ -253,8 +311,24 @@ export class HarnessRouter {
     await trace.save('decision.json',decisionTrace);await trace.save('result.json',result);await trace.save('status.json',{runId,status:result.status});
     await trace.event('result',{status:result.status,timing:result.timing,cost:result.cost});return redact(result) as HarnessResult;
   }
-  async getRun(runId:string):Promise<Record<string,unknown>> {
-    if(!/^[a-f0-9-]{36}$/.test(runId))throw new RouterError('invalid_run_id','runId must be a router-issued UUID');
+  private async runIdForTask(taskId:string|undefined):Promise<string>{
+    if(!taskId)throw new RouterError('invalid_run_id','get_run requires runId or taskId');
+    const key=createHash('sha256').update(taskId).digest('hex');
+    try{
+      const index=JSON.parse(await readFile(join(this.config.artifactsDir,'tasks',key+'.json'),'utf8')) as {runId?:string};
+      if(typeof index.runId!=='string')throw new RouterError('run_not_found','Run not found');
+      return index.runId;
+    }catch(error){
+      if(error instanceof RouterError)throw error;
+      if((error as NodeJS.ErrnoException).code==='ENOENT')throw new RouterError('run_not_found','Run not found');
+      throw error;
+    }
+  }
+  async getRun(query:string|{runId?:string;taskId?:string}):Promise<Record<string,unknown>> {
+    const requested=typeof query==='string'?query:query.runId;
+    const taskId=typeof query==='string'?undefined:query.taskId;
+    const runId=requested||await this.runIdForTask(taskId);
+    if(!runId||!/^[a-f0-9-]{36}$/.test(runId))throw new RouterError('invalid_run_id','runId must be a router-issued UUID');
     const directory=join(this.config.artifactsDir,runId);
     const read=async(name:string)=>{try{return JSON.parse(await readFile(join(directory,name),'utf8'));}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return null;throw e;}};
     const [savedResult,decision,status,task]=await Promise.all([read('result.json'),read('decision.json'),read('status.json'),read('task.json')]);
@@ -266,6 +340,7 @@ export class HarnessRouter {
   async close(){for(const controller of this.active.values())controller.abort();await Promise.all(this.adapters.map(a=>a.close?.()));await Promise.allSettled(this.pending.values());await this.ledger.close();}
 }
 function isRecord(value:unknown):value is Record<string,unknown>{return typeof value==='object'&&value!==null&&!Array.isArray(value);}
+function progressInterval(value:number|undefined):number{return typeof value==='number'&&Number.isFinite(value)&&value>=10&&value<=60_000?value:12_000;}
 
 /** Bound a health await even when a third-party adapter ignores the optional signal. */
 function abortable<T>(operation:Promise<T>,signal?:AbortSignal):Promise<T>{
@@ -287,7 +362,7 @@ function taskHealthCandidates(task:HarnessTask,registry:Registry,config:RouterCo
     const profile=config.workerProfiles?.find(profile=>profile.id===harness.id);
     if(profile&&(!config.allowExecution||!profile.enabled||!profile.allowExecution||!profile.allowUnknownCost||!task.allowUnknownCost||!task.workspace))continue;
     if((task.requiredCapabilities??[]).some(capability=>!harness.capabilities.map(normalize).includes(normalize(capability))))continue;
-    if(harness.routes.some(route=>route.enabled!==false&&(!task.preferredRouteId||route.id===task.preferredRouteId)&&requirements.every(requirement=>route.eligible_requirements.map(normalize).includes(requirement))&&(!task.desiredOutput||route.modalities.includes(task.desiredOutput))))ids.add(harness.id);
+    if(harness.routes.some(route=>route.enabled!==false&&preferenceSelectsRoute(task.preferredRouteId,route.id,config.routeProfiles)&&requirements.every(requirement=>route.eligible_requirements.map(normalize).includes(requirement))&&(!task.desiredOutput||route.modalities.includes(task.desiredOutput))))ids.add(harness.id);
   }
   return ids;
 }
