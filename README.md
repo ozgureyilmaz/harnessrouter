@@ -2,7 +2,7 @@
 
 *one agent. many harnesses.*
 
-local harnessrouter. your current agent hands a bounded task to codex, claude code, opencode, pi, and more. a decision model picks the best harness for each task, runs it on an isolated git snapshot, and gives you back text or a patch to review.
+local harnessrouter. your current agent hands a bounded task to codex, claude code, opencode, or pi. harnessrouter is the router above those harnesses. the keyless default ranks them by the priority you configure. with `--selector decisions`, a hosted decision model chooses among the eligible routes. the chosen harness runs on an isolated git snapshot and returns text or a patch for you to review.
 
 [![CI](https://github.com/ozgureyilmaz/harnessrouter/workflows/Offline%20checks/badge.svg)](https://github.com/ozgureyilmaz/harnessrouter/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -12,11 +12,19 @@ local harnessrouter. your current agent hands a bounded task to codex, claude co
 
 cross-harness workers: codex, claude code, opencode, and pi stay independent. mcp is the gateway.
 
-route choice: a decision model picks the harness. local priority is the keyless default. pin a worker, or enable a hosted provider with `--selector decisions`.
+route choice: keyless local priority, or a hosted decision model with `--selector decisions`. pin a worker when you already know the route.
 
 isolated work: the worker gets a git snapshot. edits return as a patch. your repository is not changed for you.
 
 inspectable runs: `list_harnesses`, `route_task`, `get_run`, and `cancel_run`.
+
+## a router, not a harness
+
+a harness is what lets a model act: tools, a syntax for calling them, and a loop that feeds results back. theo browne's [what is a harness?](https://x.com/theo/status/2113424203345265053) is the terminology used here. the chat window is not the harness.
+
+harnessrouter is not a harness. it is a router above harnesses, like a restaurant that lets you bring any kitchen. codex, claude code, opencode, and pi are the kitchens. harnessrouter sends one bounded task to one of them.
+
+t3 code, herdr, orca, and superset sit in that same category. harnessrouter's differences are an optional hosted decision model, git snapshot isolation, and a patch returned for review. the keyless local selector ranks by configured priority. equal top priorities defer to the host.
 
 ## how it works
 
@@ -24,7 +32,7 @@ inspectable runs: `list_harnesses`, `route_task`, `get_run`, and `cancel_run`.
 flowchart LR
     A[Your task] --> B[harnessrouter]
     B --> C{Decision model}
-    C -->|picks the best fit| D[Route to harness]
+    C -->|priority or hosted choice| D[Route to harness]
     D --> E1[Codex]
     D --> E2[Claude Code]
     D --> E3[OpenCode]
@@ -44,12 +52,14 @@ sequenceDiagram
     participant D as Decision model
     participant H as Harness
     U->>R: Send a task
-    R->>D: Which harness fits this task?
+    R->>D: Which harness should run?
     D-->>R: Use Claude Code
     R->>H: Run the task on a safe copy of your repo
     H-->>R: Answer or patch
     R-->>U: Return the result
 ```
+
+the sequence shows a hosted choice. with the keyless default, local priority answers that step and no provider is called.
 
 the same `taskId` returns a finished run. if a call times out, use `get_run` before sending that task again.
 

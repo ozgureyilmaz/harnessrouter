@@ -26,6 +26,7 @@ First npm release of the local MCP router. `package.json` is already at `1.0.0`.
 
 ### Changed
 
+- The README describes harnessrouter as a router above harnesses. The keyless selector ranks by configured priority. A hosted decision model is the opt-in that chooses among eligible routes. The terminology follows Theo Browne's [What is a harness?](https://x.com/theo/status/2113424203345265053).
 - Contributor docs drop the event notes, local checkpoint reviews, and the delivery manifest.
 
 ### Existing checkout
