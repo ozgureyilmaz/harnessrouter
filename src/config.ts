@@ -6,6 +6,7 @@ import {parse} from 'dotenv';
 import {RouterError} from './domain/errors.js';
 import {parseImageRoutePreference} from './routing/image-route.js';
 import {parseWorkerProfiles} from './workers/config.js';
+import {parseRouteProfiles, type RouteProfile} from './workers/route-profile.js';
 import type {WorkerProfile} from './workers/types.js';
 export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export interface RouterConfig {
@@ -14,7 +15,7 @@ export interface RouterConfig {
   decisionProvider?:'openai'|'jev'|'ollaya'; jevApiKey?:string; ollayaApiKey?:string; ollayaBaseUrl?:string; decisionReserveUsd?:number;
   piTaskTimeoutMs:number; falTaskTimeoutMs:number;
   imageRoute:'auto'|'fast'|'quality';allowedDomains:string[];artifactsDir:string;registryPath:string;
-  selector?:'local'|'decisions';workerProfiles?:WorkerProfile[];workspaceRoots?:string[];
+  selector?:'local'|'decisions';workerProfiles?:WorkerProfile[];routeProfiles?:RouteProfile[];workspaceRoots?:string[];
   allowExecution?:boolean;configPath?:string;
 }
 export interface ConfigOptions {cwd?:string;configPath?:string;overrides?:Partial<RouterConfig>;env?:NodeJS.ProcessEnv}
@@ -23,7 +24,7 @@ function readSettings(path:string,required=false):Record<string,unknown>{
   try{
     const value=JSON.parse(readFileSync(path,'utf8'));
     if(!value||typeof value!=='object'||Array.isArray(value))throw new Error();
-    const allowed=new Set(['selector','workerProfiles','workspaceRoots','allowExecution','dryRun','allowPaid','perTaskUsd','sessionUsd','allowedDomains','artifactsDir','registryPath','imageRoute','decisionProvider','decisionModel','decisionTimeoutMs','decisionReserveUsd','ollayaBaseUrl']);
+    const allowed=new Set(['selector','workerProfiles','routeProfiles','workspaceRoots','allowExecution','dryRun','allowPaid','perTaskUsd','sessionUsd','allowedDomains','artifactsDir','registryPath','imageRoute','decisionProvider','decisionModel','decisionTimeoutMs','decisionReserveUsd','ollayaBaseUrl']);
     if(Object.keys(value).some(key=>!allowed.has(key)))throw new Error();
     return value;
   }catch{throw new RouterError('invalid_config','Configuration must be a JSON object with supported settings and no credentials');}
@@ -95,7 +96,7 @@ export function loadConfig(options:ConfigOptions={}):RouterConfig {
     allowedDomains:domains.map(x=>x.trim().toLowerCase()).filter(Boolean),
     artifactsDir:resolve(cwd,String(env.ARTIFACTS_DIR??settings.artifactsDir??stateRoot)),
     registryPath:resolve(cwd,String(env.HARNESSROUTER_REGISTRY??settings.registryPath??join(PROJECT_ROOT,'config','harness-registry.yaml'))),
-    selector,workerProfiles:parseWorkerProfiles(settings.workerProfiles),workspaceRoots:workspaceRoots as string[],
+    selector,workerProfiles:parseWorkerProfiles(settings.workerProfiles),routeProfiles:parseRouteProfiles(settings.routeProfiles,parseWorkerProfiles(settings.workerProfiles)),workspaceRoots:workspaceRoots as string[],
     ...(configPath?{configPath:resolve(cwd,configPath)}:{}),
   };
   const merged={...config,...options.overrides};

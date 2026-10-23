@@ -17,6 +17,7 @@ import {evaluateCriteria,unverifiedCriteria} from './verification/criteria.js';
 import {normalizeUsageRecord} from './observability/metering.js';
 import {applyStaticImageRoute} from './routing/image-route.js';
 import {workerManifests} from './workers/registry.js';
+import {defaultEnabledTools, preferenceSelectsRoute, routeIdFor} from './workers/route-profile.js';
 import {selectLocal} from './routing/local.js';
 export class HarnessRouter {
   private active=new Map<string,AbortController>();
@@ -34,12 +35,29 @@ export class HarnessRouter {
   }
   private async registry(){
     const registry=await loadRegistry(this.config.registryPath,this.config.workerProfiles);
-    const ids=new Set(registry.harnesses.map(h=>h.id));
-    registry.harnesses.push(...workerManifests(this.config.workerProfiles??[]).filter(h=>!ids.has(h.id)));
+    const routeProfiles=this.config.routeProfiles??[];
+    for(const profile of this.config.workerProfiles??[]){
+      const built=workerManifests([profile],routeProfiles)[0];
+      const existing=registry.harnesses.find(harness=>harness.id===profile.id);
+      if(!existing){registry.harnesses.push(built);continue;}
+      for(const route of built.routes)if(!existing.routes.some(item=>item.id===route.id))existing.routes.push(route);
+    }
     return registry;
   }
+  private boundProfile(routeId:string){
+    const profile=this.config.routeProfiles?.find(item=>routeIdFor(item)===routeId);
+    if(!profile)return undefined;
+    const worker=this.config.workerProfiles?.find(item=>item.id===profile.harness);
+    return {id:profile.id,permissions:profile.permissions,enabledTools:profile.enabledTools??defaultEnabledTools(profile.permissions),model:profile.model??worker?.model??'',allowedMcpServers:profile.allowedMcpServers,...(profile.systemInstructions?{systemInstructions:profile.systemInstructions}:{})};
+  }
+  private profileListing(){
+    return (this.config.routeProfiles??[]).map(profile=>{
+      const worker=this.config.workerProfiles?.find(item=>item.id===profile.harness);
+      return {id:profile.id,routeId:routeIdFor(profile),harness:profile.harness,adapter:worker?.adapter??null,model:profile.model??worker?.model??null,permissions:profile.permissions,priority:profile.priority??worker?.priority??0,systemInstructions:profile.systemInstructions??null,enabledTools:profile.enabledTools??defaultEnabledTools(profile.permissions),allowedMcpServers:[...profile.allowedMcpServers],mcpForwarded:false as const};
+    });
+  }
   async listHarnesses(options: {includePerformance?: boolean}={}){
-    const result={decisionLayer:{enabled:(this.config.selector??'decisions')==='decisions',provider:this.decisionProvider,model:this.config.decisionModel,requiresPaid:this.decisionPaid,reservationUsd:this.decisionReserve,credentialConfigured:this.decisionProvider==='openai'?!!this.config.apiKey:this.decisionProvider==='jev'?!!this.config.jevApiKey:true,...(this.decisionProvider==='ollaya'?{baseUrl:this.config.ollayaBaseUrl}: {})},registry:await this.registry(),health:await this.health(),policy:{selector:this.config.selector??'decisions',dryRun:this.config.dryRun,allowExecution:this.config.allowExecution??false,allowPaid:this.config.allowPaid,remainingBudgetUsd:this.ledger.remainingUsd,allowedDomains:this.config.allowedDomains},credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
+    const result={decisionLayer:{enabled:(this.config.selector??'decisions')==='decisions',provider:this.decisionProvider,model:this.config.decisionModel,requiresPaid:this.decisionPaid,reservationUsd:this.decisionReserve,credentialConfigured:this.decisionProvider==='openai'?!!this.config.apiKey:this.decisionProvider==='jev'?!!this.config.jevApiKey:true,...(this.decisionProvider==='ollaya'?{baseUrl:this.config.ollayaBaseUrl}: {})},registry:await this.registry(),profiles:this.profileListing(),health:await this.health(),policy:{selector:this.config.selector??'decisions',dryRun:this.config.dryRun,allowExecution:this.config.allowExecution??false,allowPaid:this.config.allowPaid,remainingBudgetUsd:this.ledger.remainingUsd,allowedDomains:this.config.allowedDomains},credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
     if(!options.includePerformance)return result;
     const {readPerformanceReport}=await import('./observability/performance.js');
     return {...result,performance:await readPerformanceReport(this.config.artifactsDir,{limit:250})};
@@ -116,7 +134,7 @@ export class HarnessRouter {
       const health=await this.health({ids:taskHealthCandidates(task,registry,this.config),signal});checkAbort(signal);
       const healthCheckedAt=performance.now();
       const effectiveBudget=Math.min(this.ledger.remainingUsd,task.maxCostUsd??this.config.perTaskUsd,this.config.perTaskUsd);
-      const policy={allowPaid:this.config.allowPaid,dryRun:this.config.dryRun,selector:this.config.selector??'decisions',decisionRequiresPaid:this.decisionPaid,decisionReservationUsd:this.decisionReserve,workerProfiles:this.config.workerProfiles,allowExecution:this.config.allowExecution,remainingBudgetUsd:effectiveBudget,allowedDomains:this.config.allowedDomains,credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
+      const policy={allowPaid:this.config.allowPaid,dryRun:this.config.dryRun,selector:this.config.selector??'decisions',decisionRequiresPaid:this.decisionPaid,decisionReservationUsd:this.decisionReserve,workerProfiles:this.config.workerProfiles,routeProfiles:this.config.routeProfiles,allowExecution:this.config.allowExecution,remainingBudgetUsd:effectiveBudget,allowedDomains:this.config.allowedDomains,credentials:{openai:!!this.config.apiKey,fal:!!this.config.falKey}};
       let options=getExecutableRoutes(task,registry,health,policy);
       const budget=this.ledger.forRun(runId,Math.min(task.maxCostUsd??this.config.perTaskUsd,this.config.perTaskUsd));
       // Adapters preflight their own constraints without provider calls or reservations.
@@ -124,7 +142,7 @@ export class HarnessRouter {
       for(const candidate of options.eligible){
         const adapter=this.adapters.find(a=>a.id===candidate.harness.id);
         try{
-          await adapter?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget});
+          await adapter?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget,profile:this.boundProfile(candidate.route.id)});
           preflightEligible.push(candidate);
         }catch(error){checkAbort(signal);options.excluded.push({id:candidate.route.id,reason:error instanceof RouterError?error.code:'adapter_preflight_failed'});}
       }
@@ -137,7 +155,7 @@ export class HarnessRouter {
         const admitted=[];
         for(const candidate of options.eligible){
           try{
-            await this.adapters.find(adapter=>adapter.id===candidate.harness.id)?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:Math.max(0,budget.remainingUsd-this.decisionReserve),signal,artifactsDir:trace.directory,trace,budget});
+            await this.adapters.find(adapter=>adapter.id===candidate.harness.id)?.preflight?.(task,{runId,routeId:candidate.route.id,route:candidate.route,budgetUsd:Math.max(0,budget.remainingUsd-this.decisionReserve),signal,artifactsDir:trace.directory,trace,budget,profile:this.boundProfile(candidate.route.id)});
             admitted.push(candidate);
           }catch(error){checkAbort(signal);options.excluded.push({id:candidate.route.id,reason:error instanceof RouterError?error.code:'adapter_preflight_failed'});}
         }
@@ -158,7 +176,7 @@ export class HarnessRouter {
       }
       let chosen=options.eligible[0]!;
       if((this.config.selector??'decisions')!=='decisions'&&options.eligible.length>1){
-        const local=selectLocal(options.eligible,this.config.workerProfiles);
+        const local=selectLocal(options.eligible,this.config.workerProfiles,this.config.routeProfiles);
         if(!local){
           result={schemaVersion:'1.3',runId,taskId:task.taskId,status:'defer_to_host',selectedRouteId:null,selectedHarnessId:null,selectedModelId:null,summary:'Several eligible routes have equal priority. Choose preferredRouteId or configure worker priorities.',artifacts:[],criterionResults:unverifiedCriteria(task.acceptanceCriteria),timing:{totalMs:performance.now()-trace.start},cost:{status:'not_applicable',usd:0},usage:[],costComponents:[],tracePath:trace.path};
           await trace.save('decision.json',{...decisionTrace,decisionStatus:'not_required',reason:'local_priority_tie'});validateResult(result);await trace.save('result.json',result);await trace.save('status.json',{runId,status:result.status});return result;
@@ -193,7 +211,7 @@ export class HarnessRouter {
         if((decisionRequired||performance.now()-healthCheckedAt>1000)&&!(await abortable(adapter.health({signal}),signal)).available)throw new RouterError('adapter_unavailable','Selected harness became unavailable');
         checkAbort(signal);await trace.save('status.json',{runId,status:'executing',selectedRouteId});
         executionStart=performance.now();
-        const executionContext={runId,routeId:selectedRouteId,route:chosen.route,modelProfileId:chosen.route.agent_model_profile??undefined,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget};
+        const executionContext={runId,routeId:selectedRouteId,route:chosen.route,modelProfileId:chosen.route.agent_model_profile??undefined,budgetUsd:budget.remainingUsd,signal,artifactsDir:trace.directory,trace,budget,profile:this.boundProfile(selectedRouteId!)};
         await adapter.preflight?.(task,executionContext);
         const output=await adapter.execute({...task,timeoutMs:timeout},executionContext);
         await adapter.verify?.(task,output,executionContext);
@@ -287,7 +305,7 @@ function taskHealthCandidates(task:HarnessTask,registry:Registry,config:RouterCo
     const profile=config.workerProfiles?.find(profile=>profile.id===harness.id);
     if(profile&&(!config.allowExecution||!profile.enabled||!profile.allowExecution||!profile.allowUnknownCost||!task.allowUnknownCost||!task.workspace))continue;
     if((task.requiredCapabilities??[]).some(capability=>!harness.capabilities.map(normalize).includes(normalize(capability))))continue;
-    if(harness.routes.some(route=>route.enabled!==false&&(!task.preferredRouteId||route.id===task.preferredRouteId)&&requirements.every(requirement=>route.eligible_requirements.map(normalize).includes(requirement))&&(!task.desiredOutput||route.modalities.includes(task.desiredOutput))))ids.add(harness.id);
+    if(harness.routes.some(route=>route.enabled!==false&&preferenceSelectsRoute(task.preferredRouteId,route.id,config.routeProfiles)&&requirements.every(requirement=>route.eligible_requirements.map(normalize).includes(requirement))&&(!task.desiredOutput||route.modalities.includes(task.desiredOutput))))ids.add(harness.id);
   }
   return ids;
 }

@@ -42,6 +42,8 @@ export interface WorkerProtocol {
   probe?(profile: WorkerProfile, options?: {signal?: AbortSignal}): Promise<Health>;
   invocation(profile: WorkerProfile, options: {
     cwd: string; prompt: string; mode: 'read-only' | 'patch'; runDirectory: string; signal?: AbortSignal;
+    /** Workspace MCP tools for a named route profile. Omitted on the default worker route. */
+    enabledTools?: readonly string[];
   }): Promise<WorkerInvocation>;
   parse(records: Record<string, unknown>[], profile: WorkerProfile): WorkerCompletion;
 }
