@@ -37,6 +37,8 @@ the decision model step is whichever selector is configured, local priority rule
 
 a decision model chooses the harness for the task. the keyless default from `init` is local priority rules acting as that decision model: no provider call and no api key. equal top priorities defer to the host. `--selector decisions` or `--decision-provider` enables the hosted decision model. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. the provider returns a route id and does not choose the worker model. a bad id, or a provider error, stops the run instead of switching providers. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
 
+a named route profile sits on a worker: harness, model, system instructions, workspace tools, an mcp server name allowlist, and `read-only` or `patch` permission. configs without `routeProfiles` keep today's `workerId:configured` routes. when profiles are present, the decision model and `preferredRouteId` choose a profile (`review` or `workerId:review`). a read-only profile cannot return a patch. mcp server names are recorded and are not sent to the worker. see [route profiles](docs/ROUTE_PROFILES.md).
+
 ```mermaid
 sequenceDiagram
     participant U as You
@@ -205,6 +207,7 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [architecture](docs/ARCHITECTURE.md)
 - [compatibility](docs/COMPATIBILITY.md)
 - [decision providers](docs/DECISION_PROVIDERS.md)
+- [route profiles](docs/ROUTE_PROFILES.md)
 - [adapters](docs/ADAPTERS.md)
 - [performance](docs/PERFORMANCE.md)
 - [security and cost](docs/SECURITY_AND_COST.md)

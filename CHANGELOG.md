@@ -10,6 +10,7 @@ First npm release of the local MCP router. `package.json` is already at `1.0.0`.
 
 ### Added
 
+- Named `routeProfiles` combine a worker, model, system instructions, workspace tools, an MCP server name allowlist, and `read-only` or `patch` permission. `list_harnesses` shows them. The decision model and `preferredRouteId` can select a profile. Configs that omit `routeProfiles` keep the `workerId:configured` route. MCP server names are not forwarded to the worker. A read-only profile cannot produce a patch.
 - Local MCP server that accepts one bounded task and hands it to an enabled Codex, Claude Code, OpenCode, or Pi worker. The result is text or a patch from an isolated Git snapshot.
 - `harnessrouter init` writes `selector: "local"`. A new configuration routes by configured priority and does not need a decision API key. Dry run stays on, execution stays off, paid calls stay off, worker profiles stay disabled, and no workspace root is granted.
 - Opt-in decision providers via `--selector decisions` or `--decision-provider openai|jev|ollaya`: OpenAI Decisions (`gpt-6-luna`), TypeSafe Jev, and loopback Ollaya. A config file or process that omits `selector` still resolves to OpenAI Decisions.
