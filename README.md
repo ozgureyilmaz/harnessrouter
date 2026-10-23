@@ -153,7 +153,7 @@ harnessrouter stats --config ./harnessrouter.config.json --task-type coding --so
 harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort tokens --json
 ```
 
-`stats` reads saved runs. sorting does not change routing. see [performance](docs/PERFORMANCE.md).
+`stats` reads saved runs. Display order stays a display choice. Routing uses those measurements only when `selectionFeedback` is on, which defaults to off. see [performance](docs/PERFORMANCE.md).
 
 ### with your agent
 
