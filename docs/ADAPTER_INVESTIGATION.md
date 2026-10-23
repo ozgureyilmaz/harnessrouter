@@ -71,7 +71,7 @@ The worker in this repository accepts only OpenCode `1.18.15`, and only after a 
 
 Implement in this order:
 
-1. **Codex App Server, opt-in, stdio only.** It is the same `codex` executable, it needs no new npm dependency, and a fake JSONL peer can cover CI. The default stays `codex exec --json` with the current closed flags (`--ephemeral`, `--ignore-user-config`, `mcp_servers={}`, `features.multi_agent=false`). When a worker profile sets `mcpServers`, the CLI path replaces `mcp_servers={}`. The app-server opt-in must keep forwarding nothing unless that same list is mapped on purpose.
+1. **Codex App Server, opt-in, stdio only.** This is `codexTransport: "app-server"`. It is the same `codex` executable, it needs no new npm dependency, and a fake JSONL peer covers CI. The default stays `codex exec --json` with the closed flags (`--ephemeral`, `--ignore-user-config`, `mcp_servers={}`, `features.multi_agent=false`). When a worker profile sets `mcpServers`, the CLI path replaces `mcp_servers={}`. The app-server transport does not forward that list or route-profile `allowedMcpServers`.
 2. **Claude Agent SDK, later, and only behind an optional dependency.** The gain over stream-json is a typed stream, abort, and session resume. The cost is a new package and a bundled Claude Code binary. The CLI adapter stays.
 3. **OpenCode server, last.** The CLI already emits JSON events. A server is a long-lived HTTP listener outside the `1.18.15` isolation audit.
 
@@ -79,6 +79,6 @@ Do not turn on resume for the first server adapter. `thread/resume` and the Clau
 
 MCP progress is already on master. A synchronous `route_task` emits `notifications/progress` for `validating`, `selecting`, `executing`, and `collecting` when the host sends a progress token. The follow-up adapter can record the same events the CLI path already records (`worker.raw_event`). Feeding those events into MCP progress is separate from choosing a protocol.
 
-Worker `mcpServers` is the stdio allowlist on the CLI path and defaults to empty. Route-profile `allowedMcpServers` stays recorded (`mcpForwarded: false`) and is not a second grant. The app-server opt-in must not launch servers from that name list, and it must not forward the worker allowlist unless a later change maps those commands on purpose.
+Worker `mcpServers` is the stdio allowlist on the CLI path and defaults to empty. Route-profile `allowedMcpServers` stays recorded (`mcpForwarded: false`) and is not a second grant. `codexTransport: "app-server"` does not launch servers from either list.
 
-The follow-up that implements item 1 should also leave the CLI adapters in place, narrow the shared worker contract enough that a new harness can be added beside them, and document that in `docs/WRITING_AN_ADAPTER.md`. Cursor and Antigravity are examples of harnesses that document is for. They are not part of this investigation.
+`codex exec` stays in place beside that opt-in. `docs/WRITING_AN_ADAPTER.md` describes how to add another harness. Cursor and Antigravity are examples for that document. They are not part of this investigation.

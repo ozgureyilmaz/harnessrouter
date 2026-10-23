@@ -27,7 +27,7 @@ The configured command runs with the worker. harnessrouter does not add another 
 
 ## What each adapter receives
 
-- Codex keeps `-c mcp_servers={}` until the list is set. An opt-in replaces that value with the named servers only. `features.multi_agent=false` stays set.
+- Codex `exec` keeps `-c mcp_servers={}` until the list is set. An opt-in replaces that value with the named servers only. `features.multi_agent=false` stays set. `codexTransport: "app-server"` does not receive this list.
 - Claude Code always keeps `harnessrouter_workspace`. An opt-in adds the named server beside it and extends `--allowedTools` with `mcp__<name>__*`. A route profile's `enabledTools` replaces the workspace wildcard with the named workspace tools. Native tools stay disabled.
 - OpenCode keeps `mcp: {}` until the list is set. An opt-in writes `{type: "local", command, enabled: true}` for each named server. The other permission denials stay in place.
 - Pi rejects a non-empty list at config load. Pi has no extra MCP servers in this release.

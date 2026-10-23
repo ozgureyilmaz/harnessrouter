@@ -14,6 +14,7 @@ const schema = z.array(z.object({
   timeoutMs:z.number().int().min(1000).max(300000).optional(),
   allowedModels:z.array(z.string().min(1).max(100)).max(16).optional(),
   allowUnknownCost:z.boolean().optional(),provider:z.string().min(1).max(100).optional(),
+  codexTransport:z.enum(['cli','app-server']).optional(),
   mcpServers:z.array(mcpServerSchema).max(4).optional(),
   baseUrl:z.string().min(1).max(300).optional(),
   description:z.string().min(1).max(200).regex(/^[^\u0000-\u001f\u007f]+$/).optional(),
@@ -25,6 +26,7 @@ export function parseWorkerProfiles(value:unknown):WorkerProfile[]{
   const profiles:WorkerProfile[]=[];
   for(const profile of parsed.data){
     if(['native','pi-browser','fal-creative'].includes(profile.id)||ids.has(profile.id))throw new RouterError('invalid_config','Worker profile IDs must be unique and cannot replace specialist adapters');
+    if(profile.codexTransport&&profile.adapter!=='codex')throw new RouterError('invalid_config','codexTransport is only valid on a Codex worker');
     if(profile.baseUrl){
       if(profile.adapter!=='pi')throw new RouterError('invalid_config','baseUrl is only supported for the Pi adapter');
       if(!profile.provider)throw new RouterError('invalid_config','Pi baseUrl requires provider');
@@ -33,8 +35,10 @@ export function parseWorkerProfiles(value:unknown):WorkerProfile[]{
     ids.add(profile.id);
     const mcpServers=normalizeMcpServers(profile.mcpServers);
     assertMcpAllowlist({adapter:profile.adapter,mcpServers});
+    if(profile.codexTransport==='app-server'&&mcpServers?.length)throw new RouterError('invalid_config','Codex app-server does not forward mcpServers');
     const rest={...profile};
     delete rest.mcpServers;
+    if(rest.codexTransport!=='app-server')delete rest.codexTransport;
     profiles.push(mcpServers?{...rest,mcpServers}:rest);
   }
   return profiles;

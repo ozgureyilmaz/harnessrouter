@@ -38,7 +38,7 @@ Profile instructions are trusted configuration. They are placed after the sandbo
 
 `enabledTools` may only name `list_files`, `read_file`, and, for `patch`, `write_file`. The workspace MCP server lists and calls only that set. Codex, OpenCode, and Pi stay bounded by the read-only or patch sandbox. The tool name list does not remove their built-in editor when the permission is `patch`.
 
-`allowedMcpServers` accepts up to eight local names. `harnessrouter` is rejected so a worker cannot be told to call this router. Names are shown in `list_harnesses` and in the run trace with `mcpForwarded: false`. They are not added to the worker MCP configuration and are not a second grant. Worker `mcpServers` is the only forward, and it defaults to empty. When that list is omitted, Codex keeps `mcp_servers={}` and Claude Code keeps only the bounded workspace server. A route profile's `enabledTools` still narrows the workspace server when a worker allowlist is set.
+`allowedMcpServers` accepts up to eight local names. `harnessrouter` is rejected so a worker cannot be told to call this router. Names are shown in `list_harnesses` and in the run trace with `mcpForwarded: false`. They are not added to the worker MCP configuration and are not a second grant. Worker `mcpServers` is the only forward, and it defaults to empty. When that list is omitted, Codex `exec` keeps `mcp_servers={}` and Claude Code keeps only the bounded workspace server. Codex `app-server` does not receive the list. A route profile's `enabledTools` still narrows the workspace server when a worker allowlist is set.
 
 ## Validation
 
