@@ -4,6 +4,38 @@ All notable changes to this package are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A synchronous `route_task` sends MCP progress notifications when the host provides a progress token, so a long run can outlive the default host timeout. `async: true` returns `{runId, taskId, status: "running"}` and detaches that run from the request. `get_run` accepts `runId` or `taskId`. A `cancelled` or `interrupted` task id can run again. `completed` and `failed` stay idempotent.
+- Snapshot exclusion matches control directories by exact name and secret files by filename or basename glob. Ordinary paths such as `src/hooks/useAuth.ts` and `docs/agents.md` stay in the snapshot. Cloud keys, shell credential files, Terraform state, and `.env*` files other than `.env.example` and `.env.sample` stay out. Excluded paths are recorded on `worker.started` and on the run result.
+- A crashed router no longer leaves a worker lease and an `executing` run stuck. Startup and `harnessrouter reconcile` mark a dead lease `interrupted`, release it, and delete its snapshot. A live lease returns `worker_busy`.
+- Run snapshots and OpenCode isolation directories are deleted after the patch or text is saved.
+- Lease classification no longer depends on Linux `/proc` alone. macOS reads another process's start time from `ps` and its boot id from `kern.bootsessionuuid`. The router's own pid uses its process uptime.
+- Snapshot checks accept the macOS `/tmp` and `/var` system aliases and still reject every other symlink.
+- Ollaya HTTP errors keep a short sanitized provider message. A missing local model is `decision_model_unavailable`.
+- Pi reports a missing API key as `WORKER_CREDENTIAL_MISSING` and keeps the runtime's first error line. The bootstrap no longer replaces every failure with `PI_RUNTIME_FAILED`.
+- Built-in worker descriptions tell a review task from a patch task, so a local decision model can choose different harnesses. Pi can use a loopback OpenAI-compatible `baseUrl`.
+
+### Added
+
+- `route_task` input `async`.
+- `harnessrouter reconcile [--dry-run]`.
+- `harnessrouter prune [--older-than 7d] [--dry-run]`.
+- Config `keepSnapshots` (default false), plus optional `snapshotExclude` and `snapshotInclude`.
+- MCP server instructions and tool descriptions are a short cookbook: when to call `route_task`, and when not to. The longer safety rules live in [host guidance](docs/HOST_GUIDANCE.md).
+- `harnessrouter init` writes `AGENTS.md` in the current directory when the file is absent. An existing file is replaced only after an interactive yes. A non-interactive run prints the snippet and leaves the file.
+- Named `routeProfiles` combine a worker, model, system instructions, workspace tools, an MCP server name allowlist, and `read-only` or `patch` permission. `list_harnesses` shows them. The decision model and `preferredRouteId` can select a profile. Configs that omit `routeProfiles` keep the `workerId:configured` route. MCP server names are recorded and not forwarded (`mcpForwarded: false`). A read-only profile cannot produce a patch.
+- A worker profile may opt in to a stdio MCP allowlist (`mcpServers`). The default forwards nothing. Names are validated, inline secrets are rejected, traces keep names and command basenames, and a worker process cannot start harnessrouter. Route-profile `allowedMcpServers` stays a recorded name list (`mcpForwarded: false`) and is not a second grant.
+- `docs/ADAPTER_INVESTIGATION.md` compares the Codex, Claude Code, and OpenCode CLI workers with Codex App Server, the Claude Agent SDK, and the OpenCode server. No adapter was added. The recommended first implementation is an opt-in Codex App Server stdio adapter. The note records that route-profile MCP names stay unforwarded and that worker `mcpServers` defaults to empty.
+- A Codex profile can set `codexTransport` to `app-server` and speak a narrow Codex App Server stdio session. The default remains `codex exec`. The session does not resume threads, does not grant approvals, does not forward `mcpServers` or route-profile `allowedMcpServers`, and adds no npm dependency.
+- Optional `selectionFeedback` (`ROUTER_SELECTION_FEEDBACK` or the config key, default off). On a keyless local priority tie, saved success, time, and token observations for the same task type can choose a route, including a named route profile. A higher configured priority still wins. The `configured` route stays out of that comparison when the worker has a named profile. The decision trace records the comparison. Hosted decision prompts stay unchanged.
+
+### Changed
+
+- The README describes harnessrouter as a router above harnesses. The keyless selector ranks by configured priority. A hosted decision model is the opt-in that chooses among eligible routes. The terminology follows Theo Browne's [What is a harness?](https://x.com/theo/status/2113424203345265053).
+
 ## [1.0.0] - Unreleased
 
 First npm release of the local MCP router. `package.json` is already at `1.0.0`. Nothing has been tagged or published. The date is filled in when the `v1.0.0` tag is pushed and the publish workflow succeeds. See [open-source release](docs/OPEN_SOURCE_RELEASE.md).
@@ -26,7 +58,6 @@ First npm release of the local MCP router. `package.json` is already at `1.0.0`.
 
 ### Changed
 
-- The README describes harnessrouter as a router above harnesses. The keyless selector ranks by configured priority. A hosted decision model is the opt-in that chooses among eligible routes. The terminology follows Theo Browne's [What is a harness?](https://x.com/theo/status/2113424203345265053).
 - Contributor docs drop the event notes, local checkpoint reviews, and the delivery manifest.
 
 ### Existing checkout

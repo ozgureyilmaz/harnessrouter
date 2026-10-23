@@ -10,11 +10,13 @@ local harnessrouter. your current agent hands a bounded task to codex, claude co
 
 ## features
 
-cross-harness workers: codex, claude code, opencode, and pi stay independent. mcp is the gateway.
+cross-harness workers: codex, claude code, opencode, and pi stay independent. mcp is the gateway. a codex profile can opt in to `codexTransport: "app-server"` and speak the stdio app server. the default remains `codex exec`. see [writing an adapter](docs/WRITING_AN_ADAPTER.md).
 
-route choice: keyless local priority, or a hosted decision model with `--selector decisions`. pin a worker when you already know the route.
+route choice: keyless local priority, or a hosted decision model with `--selector decisions`. pin a worker when you already know the route. optional `selectionFeedback` can break an equal priority from saved runs and stays off until you set it.
 
 isolated work: the worker gets a git snapshot. edits return as a patch. your repository is not changed for you.
+
+tool pass-through: a worker profile can name local MCP servers in `mcpServers`. nothing is passed until that list is set. traces keep the server names, and a worker cannot start harnessrouter. see [tool pass-through](docs/TOOL_PASSTHROUGH.md).
 
 inspectable runs: `list_harnesses`, `route_task`, `get_run`, and `cancel_run`.
 
@@ -24,7 +26,7 @@ a harness is what lets a model act: tools, a syntax for calling them, and a loop
 
 harnessrouter is not a harness. it is a router above harnesses, like a restaurant that lets you bring any kitchen. codex, claude code, opencode, and pi are the kitchens. harnessrouter sends one bounded task to one of them.
 
-t3 code, herdr, orca, and superset sit in that same category. harnessrouter's differences are an optional hosted decision model, git snapshot isolation, and a patch returned for review. the keyless local selector ranks by configured priority. equal top priorities defer to the host.
+t3 code, herdr, orca, and superset sit in that same category. harnessrouter's differences are an optional hosted decision model, git snapshot isolation, and a patch returned for review. the keyless local selector ranks by configured priority. equal top priorities defer to the host unless `selectionFeedback` is on. that switch stays off, and a higher priority still wins.
 
 ## how it works
 
@@ -41,9 +43,11 @@ flowchart LR
     F --> A
 ```
 
-the decision model step is whichever selector is configured, local priority rules by default or the hosted decision model when enabled with `--selector decisions`.
+the decision model step is whichever selector is configured. `init` writes local priority. `--selector decisions` asks the hosted decision model. a file that omits `selector` still uses hosted decisions.
 
-a decision model chooses the harness for the task. the keyless default from `init` is local priority rules acting as that decision model: no provider call and no api key. equal top priorities defer to the host. `--selector decisions` or `--decision-provider` enables the hosted decision model. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. the provider returns a route id and does not choose the worker model. a bad id, or a provider error, stops the run instead of switching providers. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
+the keyless default from `init` is local priority. it ranks `workerProfiles.priority`, and a named route profile's priority when that profile sets one. it does not read the task text. equal top priorities defer to the host unless `selectionFeedback` is on. that switch stays off, and a higher priority still wins. `--selector decisions` or `--decision-provider` asks a hosted decision model to return a route id. openai decisions (`gpt-6-luna`) is the default provider. jev and loopback ollaya are the other providers. ollaya's default is `laya:typed-decisions` on `POST http://127.0.0.1:11435/v1/systemone`; pull that model with `ollaya pull laya:typed-decisions` while `ollaya serve` is running. the provider does not choose the worker model. a bad id, a missing local model, or a provider error stops the run instead of switching providers. route descriptions distinguish a read-only review from a patch, so a local model can choose different harnesses. the sequence below shows one hosted review choice. see [decision providers](docs/DECISION_PROVIDERS.md) and [architecture](docs/ARCHITECTURE.md).
+
+a named route profile sits on a worker: harness, model, system instructions, workspace tools, an mcp server name allowlist, and `read-only` or `patch` permission. configs without `routeProfiles` keep today's `workerId:configured` routes. when profiles are present, local priority, the hosted decision model, and `preferredRouteId` can choose a profile (`review` or `workerId:review`). a read-only profile cannot return a patch. mcp server names are recorded and are not sent to the worker. a worker `mcpServers` list is a separate opt-in and stays empty until set. a codex profile can set `codexTransport` to `app-server`; the default remains `codex exec`. see [route profiles](docs/ROUTE_PROFILES.md), [tool pass-through](docs/TOOL_PASSTHROUGH.md), and [writing an adapter](docs/WRITING_AN_ADAPTER.md).
 
 ```mermaid
 sequenceDiagram
@@ -61,7 +65,7 @@ sequenceDiagram
 
 the sequence shows a hosted choice. with the keyless default, local priority answers that step and no provider is called.
 
-the same `taskId` returns a finished run. if a call times out, use `get_run` before sending that task again.
+the same `taskId` returns a finished `completed` or `failed` run. a synchronous `route_task` sends progress every few seconds when the host asked for it, so a host that resets its timeout on progress can wait out a long worker. pass `"async": true` to get `{runId, taskId, status: "running"}` immediately. that run keeps going if the request is cancelled. `get_run` accepts `runId` or `taskId`. a `cancelled` or `interrupted` task id can be sent again. the earlier run stays on disk.
 
 ## requirements
 
@@ -133,6 +137,8 @@ harnessrouter doctor --config ./harnessrouter.config.json
 
 `init` writes `selector: "local"`. local priority rules act as the decision model, so this path needs no api key and does not call a provider. dry run stays on, execution stays off, and paid calls stay off until you change them. a worker can spend its own subscription or api account, and the usd amount may be unknown, so each task sets `allowUnknownCost` to true.
 
+`init` also writes `AGENTS.md` in the current directory when that file is absent. the file tells a host agent when to call `route_task`. if `AGENTS.md` already exists, an interactive terminal asks before replacing it. a non-interactive run leaves the file and prints the snippet. see [host guidance](docs/HOST_GUIDANCE.md).
+
 enable the hosted decision model when you create the file. openai is the default provider. jev and ollaya are the others:
 
 ```bash
@@ -161,9 +167,17 @@ hosts are `codex`, `claude-code`, `opencode`, and `pi`. reload the host after yo
 harnessrouter doctor --config ./harnessrouter.config.json
 harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort time
 harnessrouter stats --config ./harnessrouter.config.json --task-type coding --sort tokens --json
+harnessrouter reconcile --config ./harnessrouter.config.json
+harnessrouter reconcile --dry-run --config ./harnessrouter.config.json
+harnessrouter prune --older-than 7d --config ./harnessrouter.config.json
+harnessrouter prune --dry-run --config ./harnessrouter.config.json
 ```
 
-`stats` reads saved runs. sorting does not change routing. see [performance](docs/PERFORMANCE.md).
+`stats` reads saved runs. Display order stays a display choice. Routing uses those measurements only when `selectionFeedback` is on, which defaults to off. see [performance](docs/PERFORMANCE.md).
+
+`reconcile` also runs when the server starts and before a worker lease is taken. a lease whose process is gone, or that belongs to another machine or boot, becomes `interrupted`. the lease is released and that run's snapshot is deleted. a live process is left alone. a second task for that profile gets `worker_busy`. `worker_reconciliation_required` stays only when the lease cannot be classified safely.
+
+`prune` deletes run directories older than the cutoff. the default is 7 days. it skips a run whose lease is still live. each run deletes its snapshot after the patch or text is saved. set `"keepSnapshots": true` or `HARNESSROUTER_KEEP_SNAPSHOTS=1` to keep snapshots for debugging. `snapshotExclude` and `snapshotInclude` add basename or path globs. an include never puts `.git` back into the snapshot.
 
 ### with your agent
 
@@ -192,7 +206,7 @@ a read-only `route_task` looks like this. the route id is the profile id plus `:
 }
 ```
 
-for an edit, use `requirements` `["coding"]`, `desiredOutput` `"patch"`, and `workspace.mode` `"patch"`. you review the patch before applying it. known secret names, `.git`, and dependency directories stay out of the snapshot. see [security](SECURITY.md) and [adapters](docs/ADAPTERS.md).
+for an edit, use `requirements` `["coding"]`, `desiredOutput` `"patch"`, and `workspace.mode` `"patch"`. you review the patch before applying it. the snapshot drops control directories by exact name (`.git`, `node_modules`, `.husky`, and the router state directories) and secret files by exact name or basename glob (`.env*` other than `.env.example` and `.env.sample`, keys, cloud credentials, and terraform state). a directory named `hooks`, `auth`, `tokens`, or `secrets` is copied. the run result lists what was left out. see [security](SECURITY.md) and [adapters](docs/ADAPTERS.md).
 
 a source checkout can also turn on a pi browser route and a fal image route. they stay off until you opt in. [compatibility](docs/COMPATIBILITY.md).
 
@@ -215,7 +229,12 @@ tests use local fixtures. ci does not call a model. contributor notes: [contribu
 - [architecture](docs/ARCHITECTURE.md)
 - [compatibility](docs/COMPATIBILITY.md)
 - [decision providers](docs/DECISION_PROVIDERS.md)
+- [route profiles](docs/ROUTE_PROFILES.md)
+- [host guidance](docs/HOST_GUIDANCE.md)
 - [adapters](docs/ADAPTERS.md)
+- [writing an adapter](docs/WRITING_AN_ADAPTER.md)
+- [adapter investigation](docs/ADAPTER_INVESTIGATION.md)
+- [tool pass-through](docs/TOOL_PASSTHROUGH.md)
 - [performance](docs/PERFORMANCE.md)
 - [security and cost](docs/SECURITY_AND_COST.md)
 - [security](SECURITY.md)

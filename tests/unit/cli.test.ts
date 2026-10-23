@@ -103,6 +103,49 @@ test('init --selector decisions defaults the provider to OpenAI and keeps execut
   } finally { await rm(dir, {recursive: true, force: true}); }
 });
 
+test('init writes AGENTS.md once and leaves an existing file unless the prompt says yes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-agents-'));
+  try {
+    const target = join(dir, 'config.json');
+    const agents = join(dir, 'AGENTS.md');
+    const created = capture();
+    assert.equal(await runCli(['init', '--config', target], {...created.io, cwd: dir, env: {}, interactive: false}), 0);
+    const snippet = await readFile(agents, 'utf8');
+    assert.match(snippet, /route_task/);
+    assert.match(snippet, /## Skill/);
+    assert.match(created.stdout, /Wrote host guidance/);
+    await writeFile(agents, 'keep this host file\n');
+    const skipped = capture();
+    const second = join(dir, 'second.json');
+    assert.equal(await runCli(['init', '--config', second], {...skipped.io, cwd: dir, env: {}, interactive: false}), 0);
+    assert.equal(await readFile(agents, 'utf8'), 'keep this host file\n');
+    assert.match(skipped.stdout, /Left existing host guidance unchanged/);
+    assert.match(skipped.stdout, /## Skill/);
+    const declined = capture();
+    const third = join(dir, 'third.json');
+    assert.equal(await runCli(['init', '--config', third], {...declined.io, cwd: dir, env: {}, interactive: true, confirm: () => false}), 0);
+    assert.equal(await readFile(agents, 'utf8'), 'keep this host file\n');
+    assert.match(declined.stdout, /Left existing host guidance unchanged/);
+    assert.doesNotMatch(declined.stdout, /## Skill/);
+    const accepted = capture();
+    const fourth = join(dir, 'fourth.json');
+    let question = '';
+    assert.equal(await runCli(['init', '--config', fourth], {...accepted.io, cwd: dir, env: {}, interactive: true, confirm: prompt => {question = prompt; return true;}}), 0);
+    assert.match(question, /Overwrite it\?/);
+    assert.equal(await readFile(agents, 'utf8'), snippet);
+    assert.match(accepted.stdout, /Replaced host guidance/);
+  } finally { await rm(dir, {recursive: true, force: true}); }
+});
+
+test('init does not write AGENTS.md when configuration is rejected', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-agents-reject-'));
+  try {
+    const output = capture();
+    assert.equal(await runCli(['init', '--selector', 'local', '--decision-provider', 'openai', '--config', join(dir, 'conflict.json')], {...output.io, cwd: dir, env: {}, interactive: false}), 1);
+    await assert.rejects(readFile(join(dir, 'AGENTS.md'), 'utf8'));
+  } finally { await rm(dir, {recursive: true, force: true}); }
+});
+
 test('init rejects a decision provider on the local selector before writing a file', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'harnessrouter-selector-conflict-'));
   try {
@@ -136,6 +179,7 @@ test('CLI rejects invalid flags and unsupported host names without writing files
   const help = capture();
   assert.equal(await runCli(['mcp-config', '--help'], {...help.io, env: {}}), 0);
   assert.match(help.stdout, /harnessrouter init/);
+  assert.match(help.stdout, /AGENTS\.md/);
 });
 
 test('doctor validates configuration and platform without launching worker tasks', async () => {
